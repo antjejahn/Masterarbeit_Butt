@@ -1,0 +1,16 @@
+import numpy as np
+
+def create_bootstrap_indices_and__bN_bi(n_data_points, n_bootstrap):
+    
+    indices_list = np.random.choice(n_data_points, (n_bootstrap, n_data_points), replace=True)
+    
+    # Initialize N_bi with -1 indicating that those entries are unused
+    N_bi_ = -1 * np.ones((n_data_points, n_bootstrap))
+
+    # Use a vectorized approach to find non-appearances
+    for x_i in range(n_data_points):
+        mask = ~np.any(indices_list == x_i, axis=1)  # True where x_i is NOT present in each bootstrap sample
+        N_bi_[x_i, :np.sum(mask)] = np.where(mask)[0]  # Assign indices where x_i is not present
+    indexe_der_bootsamples_ohne_x_i = [row[row != -1].astype(int) for row in N_bi_]
+    
+    return indices_list, indexe_der_bootsamples_ohne_x_i   # indices_list is a 2D array of shape (n_bootstrap, n_data_points) and N_bi is a list of lists
