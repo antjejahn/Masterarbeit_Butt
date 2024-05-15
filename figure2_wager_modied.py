@@ -36,7 +36,7 @@ def bagging_decision_trees(x_points, y_noisy, n_bootstrap, max_leaf_nodes=5, see
 
     return tree_predictions_b, indices_list, N_bi
 
-def inf_JK_bagged_variance(N_bi, tree_predictions_b):
+def inf_JK_bagged_variance(N_bi, tree_predictions_b, chunk_size=1000):
     """Calculates the infinitesimal jackknife variance estimate."""
     n_bootstrap, n_data_points = N_bi.shape
     n_preds = tree_predictions_b.shape[1]
@@ -44,8 +44,19 @@ def inf_JK_bagged_variance(N_bi, tree_predictions_b):
     N_star_mean = np.mean(N_bi, axis=0).astype(np.float32)
     T_N_star_mean = np.mean(tree_predictions_b, axis=0).astype(np.float32)
 
-    # Calculate covariance and bias correction in one go
-    cov_matrix = np.mean((N_bi[:, :, None] - N_star_mean) * (tree_predictions_b[:, None, :] - T_N_star_mean), axis=0).astype(np.float32)
+    # Initialize the covariance matrix
+    cov_matrix = np.zeros((n_data_points, n_preds), dtype=np.float32)
+    
+    # Calculate in chunks to avoid memory issues
+    for start in range(0, n_bootstrap, chunk_size):
+        end = min(start + chunk_size, n_bootstrap)
+        chunk_N_bi = N_bi[start:end]
+        chunk_tree_predictions_b = tree_predictions_b[start:end]
+        cov_matrix += np.mean((chunk_N_bi[:, :, None] - N_star_mean) * 
+                              (chunk_tree_predictions_b[:, None, :] - T_N_star_mean), axis=0).astype(np.float32)
+
+    cov_matrix /= (n_bootstrap // chunk_size)
+
     bias_correction = (n_data_points / n_bootstrap) * np.mean((tree_predictions_b - T_N_star_mean) ** 2, axis=0).astype(np.float32)
 
     # Calculate infinitesimal jackknife estimate
@@ -71,7 +82,7 @@ def main():
     """Main function to run the simulation and plotting."""
     # Simulation parameters
     n_data_points = 500
-    n_simulations = 1_000
+    n_simulations = 1000
     n_bootstrap = 10_000  # Keeping the original value
     seed = 63
     np.random.seed(seed)
