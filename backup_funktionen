@@ -1,4 +1,6 @@
 import numpy as np
+#indexe_der_bootsamples_ohne_x_i
+
 
 def create_bootstrap_indices_and__bN_bi(n_data_points, n_bootstrap):
     
