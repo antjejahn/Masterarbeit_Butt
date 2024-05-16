@@ -36,7 +36,7 @@ def bagging_decision_trees(x_points, y_noisy, n_bootstrap, max_leaf_nodes=5, see
 
     return tree_predictions_b, N_bi
 
-def inf_JK_bagged_variance(N_bi, tree_predictions_b, chunk_size=100):
+def inf_JK_bagged_variance(N_bi, tree_predictions_b, chunk_size=250):
     """Calculates the infinitesimal jackknife variance estimate."""
     n_bootstrap, n_data_points = N_bi.shape
     n_preds = tree_predictions_b.shape[1]
@@ -85,7 +85,7 @@ def main():
     n_data_points = 500
     n_simulations = 1_000
     n_bootstrap = 10_000  # Keeping the original value
-    seed = 63
+    seed = 62
     np.random.seed(seed)
 
     # Generate data
