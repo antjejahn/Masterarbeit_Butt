@@ -3,12 +3,18 @@ import numpy as np
 from sklearn.tree import DecisionTreeRegressor
 import matplotlib.pyplot as plt
 from concurrent.futures import ProcessPoolExecutor
+from tqdm import tqdm  
+
+# Constants
+NOISE_VARIANCE = 0.25
+MAX_LEAF_NODES = 5
+CHUNK_SIZE = 250
 
 def step_function(x):
     """Defines the true step function."""
     return np.where(x < 0.35, 0, np.where(x < 0.45, 0.7, np.where(x < 0.55, 1.4, np.where(x < 0.65, 0.7, 0))))
 
-def generate_data(x_points, y_true, noise_variance=0.25, seed=None):
+def generate_data(x_points, y_true, noise_variance=NOISE_VARIANCE, seed=None):
     """Generates noisy data based on the true function."""
     np.random.seed(seed)
     noise = np.random.normal(0, np.sqrt(noise_variance), len(x_points)).astype(np.float32)
@@ -23,7 +29,7 @@ def create_bootstrap_indices_and_Nbi(n_data_points, n_bootstrap, seed=None):
         counts[:, x_i] = np.sum(indices_list == x_i, axis=1)
     return indices_list, counts
 
-def bagging_decision_trees(x_points, y_noisy, n_bootstrap, max_leaf_nodes=5, seed=None):
+def bagging_decision_trees(x_points, y_noisy, n_bootstrap, max_leaf_nodes=MAX_LEAF_NODES, seed=None):
     """Performs bagging with decision trees."""
     n_data_points = x_points.shape[0]
     tree_predictions_b = np.zeros((n_bootstrap, n_data_points), dtype=np.float32)
@@ -36,7 +42,7 @@ def bagging_decision_trees(x_points, y_noisy, n_bootstrap, max_leaf_nodes=5, see
 
     return tree_predictions_b, N_bi
 
-def inf_JK_bagged_variance(N_bi, tree_predictions_b, chunk_size=250):
+def inf_JK_bagged_variance(N_bi, tree_predictions_b, chunk_size=CHUNK_SIZE):
     """Calculates the infinitesimal jackknife variance estimate."""
     n_bootstrap, n_data_points = N_bi.shape
     n_preds = tree_predictions_b.shape[1]
@@ -64,11 +70,10 @@ def inf_JK_bagged_variance(N_bi, tree_predictions_b, chunk_size=250):
 
     return bagged_inf_jackknife_est
 
-
 def simulate_bagging_and_variance(x_points, y_true, n_bootstrap, simulation_index, seed):
     """Simulate bagging and calculate variance for a single run."""
     np.random.seed(seed + simulation_index)
-    y_noisy = generate_data(x_points, y_true, noise_variance=0.25, seed=seed + simulation_index)
+    y_noisy = generate_data(x_points, y_true, noise_variance=NOISE_VARIANCE, seed=seed + simulation_index)
 
     # Perform bagging
     tree_predictions_b, N_bi = bagging_decision_trees(x_points, y_noisy, n_bootstrap, seed=seed + simulation_index)
@@ -84,8 +89,8 @@ def main():
     # Simulation parameters
     n_data_points = 500
     n_simulations = 1_000
-    n_bootstrap = 10_000  # Keeping the original value
-    seed = 62
+    n_bootstrap = 500  # Adjust as needed
+    seed = 63
     np.random.seed(seed)
 
     # Generate data
@@ -96,27 +101,23 @@ def main():
     bagged_predictions_all = np.zeros((n_simulations, n_data_points), dtype=np.float32)
     est_variances_all = np.zeros((n_simulations, n_data_points), dtype=np.float32)
 
-    # Parallelize simulations
+    # Parallelize simulations with progress bar
     with ProcessPoolExecutor() as executor:
-        results = list(executor.map(simulate_bagging_and_variance, 
-                                    [x_points]*n_simulations, 
-                                    [y_true]*n_simulations, 
-                                    [n_bootstrap]*n_simulations, 
-                                    range(n_simulations), 
-                                    [seed]*n_simulations))
-
-    # Collect results
-    for i, (bagged_predictions, est_variances) in enumerate(results):
-        bagged_predictions_all[i, :] = bagged_predictions
-        est_variances_all[i, :] = est_variances
+        futures = [executor.submit(simulate_bagging_and_variance, x_points, y_true, n_bootstrap, i, seed) for i in range(n_simulations)]
+        
+        for i, future in enumerate(tqdm(futures, desc="Simulations", unit="simulation")):
+            bagged_predictions, est_variances = future.result()
+            bagged_predictions_all[i, :] = bagged_predictions
+            est_variances_all[i, :] = est_variances
 
     # Calculate true variance of bagged predictions
     true_variances = bagged_predictions_all.var(axis=0, ddof=1)
     est_variances_mean = est_variances_all.mean(axis=0)
     est_variances_std = est_variances_all.std(axis=0, ddof=1)
 
-    print(round(np.mean(true_variances), 10))
-    print(round(np.mean(est_variances_mean), 10))
+    print(f"Mean true variance: {round(np.mean(true_variances), 10)}")
+    print(f"Mean estimated variance: {round(np.mean(est_variances_mean), 10)}")
+    print(f"Min estimated variance: {round(np.min(est_variances_all), 10)}")
 
     # Plotting the results
     plt.figure(figsize=(10, 6))
@@ -132,7 +133,6 @@ def main():
     plt.savefig(f"figure2_wager_nx{n_data_points}_nsim{n_simulations}_nB{n_bootstrap}_seed{seed}.png")
 
 if __name__ == '__main__':
-    
     start_time = time.time()
     main()
-    print("--- %s seconds ---" % (round((time.time() - start_time), 2)))
+    print(f"--- {round((time.time() - start_time), 2)} seconds ---")
