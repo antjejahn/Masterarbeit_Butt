@@ -86,9 +86,9 @@ def simulate_bagging_and_variance(x_points, y_true, n_bootstrap, simulation_inde
 def main():
     """Main function to run the simulation and plotting."""
     # Simulation parameters
-    n_data_points = 50
-    n_simulations = 1_00
-    n_bootstrap = 50  # Adjust as needed
+    n_data_points = 500
+    n_simulations = 1_000
+    n_bootstrap = 500  # Adjust as needed
     seed = 62
 
     # Generate data
@@ -119,8 +119,8 @@ def main():
 
     # Plotting the results
     plt.figure(figsize=(10, 6))
-    plt.plot(x_points, true_variances, label='True Variance of Bagged Predictions')
-    plt.plot(x_points, est_variances_mean, label='Mean Est. Variance of Bagged Predictions')
+    plt.plot(x_points, true_variances, label='True Variance')
+    plt.plot(x_points, est_variances_mean, label='Mean Est. Variance')
     plt.fill_between(x_points, est_variances_mean - est_variances_std, est_variances_mean + est_variances_std, color='b', alpha=0.2, label='±1 std')
     plt.title('True Variance of Bagged Predictions Across Simulated Datasets')
     plt.xlabel('x')
@@ -138,4 +138,5 @@ def main():
 if __name__ == '__main__':
     start_time = time.time()
     main()
-    print(f"--- {round((time.time() - start_time), 2)} seconds ---")
+    print("--- runtime: %s minutes ---" % round((time.time() - start_time)/60,2))
+   
