@@ -15,8 +15,8 @@ def step_function(x):
     """Defines the true step function."""
     return np.where(
         x < 0.35,
-        0,
-        np.where(x < 0.45, 0.7, np.where(x < 0.55, 1.4, np.where(x < 0.65, 0.7, 0))),
+        0.,
+        np.where(x < 0.45, 0.7, np.where(x < 0.55, 1.4, np.where(x < 0.65, 0.7, 0.))),
     )
 
 
@@ -66,7 +66,7 @@ def inf_JK_bagged_variance(N_bi, tree_predictions_b, chunk_size=CHUNK_SIZE):
     n_bootstrap, n_data_points = N_bi.shape
     n_preds = tree_predictions_b.shape[1]
 
-    N_star_mean = np.mean(N_bi, axis=0).astype(np.float32)
+    N_star_mean = np.ones((n_data_points,n_preds)).astype(np.float32)
     T_N_star_mean = np.mean(tree_predictions_b, axis=0).astype(np.float32)
 
     # Initialize the covariance matrix
@@ -83,9 +83,9 @@ def inf_JK_bagged_variance(N_bi, tree_predictions_b, chunk_size=CHUNK_SIZE):
             axis=0,
         ).astype(np.float32)
 
-    cov_matrix /= n_bootstrap
+    cov_matrix /= (n_bootstrap-1)
 
-    bias_correction = (n_data_points / n_bootstrap) * np.mean(
+    bias_correction = (((n_data_points-1)*n_bootstrap) / (n_bootstrap-1)**3) * np.sum(
         (tree_predictions_b - T_N_star_mean) ** 2, axis=0
     ).astype(np.float32)
 
@@ -159,9 +159,9 @@ def save_results_png(
 def main():
     """Main function to run the simulation and plotting."""
     # Simulation parameters
-    n_data_points = 50
-    n_simulations = 1_00
-    n_bootstrap = 50  # Adjust as needed
+    n_data_points = 500
+    n_simulations = 1_000
+    n_bootstrap = 500  # Adjust as needed
     seed = 62
 
     # Generate data
