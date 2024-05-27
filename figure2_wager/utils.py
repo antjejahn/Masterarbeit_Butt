@@ -42,14 +42,16 @@ def create_bootstrap_indices_and_Nbi(
 
 
 def bagging_decision_trees(
-    x_points: np.ndarray, y_noisy: np.ndarray, B: int, max_leaf_nodes: int, seed: int, min_samples_leaf: int= 1,
+    x: np.ndarray, y_noisy: np.ndarray,new_data: np.ndarray, B: int, 
+    max_leaf_nodes: int, seed: int, min_samples_leaf: int= 1,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Returns: \n
     tree_predictions_b(B, n_data_points) , \n
     N_bi(B, n_data_points)"""
 
-    n_data_points = x_points.shape[0]
-    tree_predictions_b = np.zeros(shape=(B, n_data_points))
+    n_data_points = x.shape[0]
+    n_pred_points = new_data.shape[0]
+    tree_predictions_b = np.zeros(shape=(B, n_pred_points))
     indices_list, N_bi = create_bootstrap_indices_and_Nbi(
         n_data_points=n_data_points, B=B, seed=seed
     )
@@ -57,9 +59,9 @@ def bagging_decision_trees(
     for b in range(B):
         tree_model = DecisionTreeRegressor(max_leaf_nodes=max_leaf_nodes,min_samples_leaf=min_samples_leaf)
         tree_model.fit(
-            X=x_points[indices_list[b]].reshape(-1, 1), y=y_noisy[indices_list[b]]
+            X=x[indices_list[b]].reshape(-1, 1), y=y_noisy[indices_list[b]]
         )
-        tree_predictions_b[b, :] = tree_model.predict(X=x_points.reshape(-1, 1))
+        tree_predictions_b[b, :] = tree_model.predict(X=new_data.reshape(-1, 1))
 
     return tree_predictions_b, N_bi
 
@@ -82,12 +84,14 @@ def step_function(x):
 
 
 def generate_data(
-    x_points: np.ndarray, y_true: np.ndarray, seed: int, noise_variance=0.25
+    n_data_points: int, seed: int, noise_variance=0.25
 ):
     """Generates noisy data based on the true function."""
     np.random.seed(seed=seed)
-    noise = np.random.normal(loc=0, scale=np.sqrt(noise_variance), size=len(x_points))
-    return y_true + noise
+    x = np.random.uniform(0, 1, n_data_points)
+    y_true = step_function(x)
+    noise = np.random.normal(loc=0, scale=np.sqrt(noise_variance), size=n_data_points)
+    return x , y_true, y_true + noise
 
 
 def inf_JK_bagged_variance(
@@ -174,8 +178,8 @@ def inf_JK_bagged_variance_simple(N_bi: np.ndarray, T_N_b: np.ndarray) -> np.nda
 
 
 def simulate_bagging_and_variance(
-    x_points: np.ndarray,
-    y_true: np.ndarray,
+    new_data: np.ndarray,
+    n_data_points: int,
     B: int,
     simulation_index: int,
     seed: int,
@@ -203,17 +207,17 @@ def simulate_bagging_and_variance(
 
     """
 
-    y_noisy = generate_data(
-        x_points=x_points,
-        y_true=y_true,
+    x, y_true, y_noisy = generate_data(
+        n_data_points=n_data_points,
         seed=seed + simulation_index,
         noise_variance=noise_variance_for_y,
     )
 
     # Perform bagging
     tree_predictions_b, N_bi = bagging_decision_trees(
-        x_points=x_points,
+        x=x,
         y_noisy=y_noisy,
+        new_data=new_data,
         B=B,
         max_leaf_nodes=max_leaf_nodes,
         seed=seed + simulation_index,
@@ -226,13 +230,13 @@ def simulate_bagging_and_variance(
         est_variances = inf_JK_bagged_variance(
             N_bi=N_bi, T_N_b=tree_predictions_b, chunk_size=chunk_size
         )
-    else: est_variances = np.zeros(x_points.shape[0])
+    else: est_variances = np.zeros(n_data_points)
 
     return bagged_predictions, est_variances
 
 
 def save_results_png(
-    x_points: np.ndarray,
+    new_data: np.ndarray,
     true_variances: np.ndarray,
     est_variances_mean: np.ndarray,
     est_variances_std: np.ndarray,
@@ -246,7 +250,7 @@ def save_results_png(
     Save the results plot as a PNG file.
 
     Args:
-        x_points (array-like): The x-axis values.
+        new_data (array-like): The x-axis values to predict.
         true_variances (array-like): The true variances.
         est_variances_mean (array-like): The mean estimated variances.
         est_variances_std (array-like): The standard deviation of estimated variances.
@@ -261,10 +265,10 @@ def save_results_png(
 
     # Plotting the results
     plt.figure(figsize=(10, 6))
-    plt.plot(x_points, true_variances, label="True Variance")
-    plt.plot(x_points, est_variances_mean, label="Mean Est. Variance")
+    plt.plot(new_data, true_variances, label="True Variance")
+    plt.plot(new_data, est_variances_mean, label="Mean Est. Variance")
     plt.fill_between(
-        x_points,
+        new_data,
         est_variances_mean - est_variances_std,
         est_variances_mean + est_variances_std,
         color="b",
