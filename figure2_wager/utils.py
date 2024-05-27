@@ -42,7 +42,7 @@ def create_bootstrap_indices_and_Nbi(
 
 
 def bagging_decision_trees(
-    x_points: np.ndarray, y_noisy: np.ndarray, B: int, max_leaf_nodes: int, seed: int
+    x_points: np.ndarray, y_noisy: np.ndarray, B: int, max_leaf_nodes: int, seed: int, min_samples_leaf: int= 1,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Returns: \n
     tree_predictions_b(B, n_data_points) , \n
@@ -55,7 +55,7 @@ def bagging_decision_trees(
     )
 
     for b in range(B):
-        tree_model = DecisionTreeRegressor(max_leaf_nodes=max_leaf_nodes)
+        tree_model = DecisionTreeRegressor(max_leaf_nodes=max_leaf_nodes,min_samples_leaf=min_samples_leaf)
         tree_model.fit(
             X=x_points[indices_list[b]].reshape(-1, 1), y=y_noisy[indices_list[b]]
         )
@@ -183,6 +183,7 @@ def simulate_bagging_and_variance(
     max_leaf_nodes=5,
     chunk_size=250,
     ijk_calculation=False,
+    min_samples_leaf: int= 1,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Simulate bagging and calculate variance for a single run.
@@ -216,6 +217,7 @@ def simulate_bagging_and_variance(
         B=B,
         max_leaf_nodes=max_leaf_nodes,
         seed=seed + simulation_index,
+        min_samples_leaf=min_samples_leaf,
     )
     bagged_predictions = tree_predictions_b.mean(axis=0)
 
