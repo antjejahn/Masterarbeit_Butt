@@ -182,6 +182,7 @@ def simulate_bagging_and_variance(
     noise_variance_for_y=0.25,
     max_leaf_nodes=5,
     chunk_size=250,
+    ijk_calculation=False,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Simulate bagging and calculate variance for a single run.
@@ -218,10 +219,12 @@ def simulate_bagging_and_variance(
     )
     bagged_predictions = tree_predictions_b.mean(axis=0)
 
-    # Calculate infinitesimal jackknife variance
-    est_variances = inf_JK_bagged_variance(
-        N_bi=N_bi, T_N_b=tree_predictions_b, chunk_size=chunk_size
-    )
+    if ijk_calculation:
+        # Calculate infinitesimal jackknife variance
+        est_variances = inf_JK_bagged_variance(
+            N_bi=N_bi, T_N_b=tree_predictions_b, chunk_size=chunk_size
+        )
+    else: est_variances = np.zeros(x_points.shape[0])
 
     return bagged_predictions, est_variances
 
@@ -235,6 +238,7 @@ def save_results_png(
     n_simulations: int,
     B: int,
     seed: int,
+    noise_variance 
 ):
     """
     Save the results plot as a PNG file.
@@ -268,7 +272,7 @@ def save_results_png(
     plt.title("True Variance of Bagged Predictions Across Simulated Datasets")
     plt.xlabel("x")
     plt.ylabel("Variance")
-    plt.ylim(-0.02, 0.06)
+    plt.ylim(-0.02, 0.25)
     plt.grid(True)  
 
     plt.text(
@@ -280,5 +284,6 @@ def save_results_png(
     )
     plt.legend()
     plt.savefig(
-        f"figure2_wager/figures/figure2_wager_seed_{seed}_nx{n_data_points}_nB{B}_{int(time.time())}.png"
+        f"figure2_wager/figures/figure2_wager_seed_{seed}_nx{n_data_points}_nB{B}_noise{noise_variance}.png"
     )
+    #{int(time.time())}
