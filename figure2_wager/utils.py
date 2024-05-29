@@ -4,6 +4,7 @@ from sklearn.tree import DecisionTreeRegressor
 import matplotlib.pyplot as plt
 import time
 
+
 def save_results_png(
     new_data: np.ndarray,
     true_variances: np.ndarray,
@@ -49,7 +50,7 @@ def save_results_png(
     plt.xlabel("x")
     plt.ylabel("Variance")
     plt.ylim(-0.01, 0.06)
-    plt.grid(True)  
+    plt.grid(True)
 
     plt.text(
         0.05,
@@ -67,7 +68,8 @@ def save_results_png(
         plt.savefig(
             f"figure2_wager/figures/figure2_seed{seed}_nB{B}_{dt_args.items()}.png"
         )
-    #{int(time.time())}
+    # {int(time.time())}
+
 
 def inf_JK_bagged_variance(
     N_bi: np.ndarray, T_N_b: np.ndarray, chunk_size: int
@@ -113,6 +115,7 @@ def inf_JK_bagged_variance(
     var_inf_JK_U = cov_vector - bias_correction
     return var_inf_JK_U
 
+
 def inf_JK_bagged_variance_simple(N_bi: np.ndarray, T_N_b: np.ndarray) -> np.ndarray:
     """
     Calculate the Jackknife-Infenitesimal Variance for bagged learners.
@@ -150,8 +153,9 @@ def inf_JK_bagged_variance_simple(N_bi: np.ndarray, T_N_b: np.ndarray) -> np.nda
     var_inf_JK_U = cov_vector - bias_correction
     return var_inf_JK_U
 
+
 def create_bootstrap_indices_and_Nbi(
-    n: int, B: int, seed: int=None
+    n: int, B: int, seed: int = None
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Creates bootstrap indices and counts.
@@ -178,11 +182,14 @@ def create_bootstrap_indices_and_Nbi(
     """
     rng = np.random.default_rng(seed)
     boot_indices = rng.integers(0, n, size=(B, n))
-    boot_counts = np.apply_along_axis(lambda x: np.bincount(x, minlength=n), axis=1, arr=boot_indices)
+    boot_counts = np.apply_along_axis(
+        lambda x: np.bincount(x, minlength=n), axis=1, arr=boot_indices
+    )
     return boot_indices, boot_counts
 
+
 def generate_data(
-    n: int, seed: int=None, noise_variance=0.25, fix_points=False
+    n: int, seed: int = None, noise_variance=0.25, fix_points=False
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Generate synthetic data for a regression problem.
@@ -202,22 +209,33 @@ def generate_data(
 
     rng = np.random.default_rng(seed)
     x = np.linspace(0, 1, n) if fix_points else rng.uniform(0, 1, n)
-    
+
     # Step function
     y_true = np.piecewise(
         x,
-        [x < 0.35, (x >= 0.35) & (x < 0.45), (x >= 0.45) & (x < 0.55), (x >= 0.55) & (x < 0.65), x >= 0.65],
-        [0.0, 0.7, 1.4, 0.7, 0.0]
+        [
+            x < 0.35,
+            (x >= 0.35) & (x < 0.45),
+            (x >= 0.45) & (x < 0.55),
+            (x >= 0.55) & (x < 0.65),
+            x >= 0.65,
+        ],
+        [0.0, 0.7, 1.4, 0.7, 0.0],
     )
-    
+
     noise = rng.normal(loc=0, scale=np.sqrt(noise_variance), size=n)
     y_noisy = y_true + noise
-    
+
     return x, y_true, y_noisy
 
+
 def bagging_decision_trees(
-    x: np.ndarray, y_noisy: np.ndarray, new_data: np.ndarray, B: int, 
-    dt_args: Dict, seed: int=None
+    x: np.ndarray,
+    y_noisy: np.ndarray,
+    new_data: np.ndarray,
+    B: int,
+    dt_args: Dict,
+    seed: int = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Train and predict using bagging with decision trees.
@@ -238,10 +256,8 @@ def bagging_decision_trees(
     n = x.shape[0]
     n_pred = new_data.shape[0]
     tree_predictions_b = np.zeros(shape=(B, n_pred))
-    indices_list, N_bi = create_bootstrap_indices_and_Nbi(
-        n=n, B=B, seed=seed
-    )
-    
+    indices_list, N_bi = create_bootstrap_indices_and_Nbi(n=n, B=B, seed=seed)
+
     x_reshaped = x.reshape(-1, 1)
     new_data_reshaped = new_data.reshape(-1, 1)
 
@@ -251,6 +267,7 @@ def bagging_decision_trees(
         tree_predictions_b[b] = tree_model.predict(new_data_reshaped)
 
     return tree_predictions_b, N_bi
+
 
 def simulate_bagging_and_variance(
     n: int,
@@ -262,7 +279,7 @@ def simulate_bagging_and_variance(
     noise_var_for_generating_data=0.25,
     fix_x_points=False,
     ijk_calculation=False,
-    chunk_size=250
+    chunk_size=250,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Simulates bagging and calculates variance for a given set of parameters.
@@ -284,14 +301,14 @@ def simulate_bagging_and_variance(
     """
 
     adjusted_seed = seed + simulation_index
-    
+
     x, y_true, y_noisy = generate_data(
         n=n,
         seed=adjusted_seed,
         noise_variance=noise_var_for_generating_data,
         fix_points=fix_x_points,
     )
-    
+
     if fix_x_points:
         x = np.linspace(0, 1, n)
 
@@ -302,7 +319,7 @@ def simulate_bagging_and_variance(
         new_data=new_data,
         B=B,
         dt_args=dt_args,
-        seed=adjusted_seed
+        seed=adjusted_seed,
     )
     bagged_predictions = tree_predictions_b.mean(axis=0)
 
@@ -310,6 +327,7 @@ def simulate_bagging_and_variance(
         est_variances = inf_JK_bagged_variance(
             N_bi=N_bi, T_N_b=tree_predictions_b, chunk_size=chunk_size
         )
-    else: est_variances = np.zeros(n)
+    else:
+        est_variances = np.zeros(n)
 
     return bagged_predictions, est_variances
