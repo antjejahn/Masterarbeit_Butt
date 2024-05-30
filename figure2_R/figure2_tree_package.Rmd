@@ -70,7 +70,7 @@ run_simulation <- function(sim) {
   set.seed(seed + sim)
 
   # Generate data with fixed x points
-  x1 <-  seq(0, 1, length.out = 500)
+  x1 <-  seq(0, 1, length.out = n)
   e <- rnorm(n, 0, sqrt(noise_var))
   y <- 0.7 * (x1 >= 0.35 & x1 < 0.45) + 0.7 * (x1 >= 0.55 & x1 < 0.65) +
     1.4 * (x1 >= 0.45 & x1 < 0.55) + e
