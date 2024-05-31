@@ -39,7 +39,7 @@ bootstrap <- function(n, B, df, new_data, sample_indices_and_nbi, theta) {
   boot_indices  <- res$boot_indices
   nbi           <- res$boot_counts
   for (b in 1:B) {
-    sample_df <- df[boot_indices[b,], ]
+    sample_df <- df[boot_indices[b, ], ]
     thetastar[b, ] <- theta(new_data, sample_df)
   }
   return(list(thetastar = thetastar, nbi = nbi))
