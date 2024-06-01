@@ -26,6 +26,9 @@ def save_results_png(
     true_variances = bagged_preds.var(axis=0, ddof=1)
     est_variances_mean = est_vars.mean(axis=0)
     est_variances_std = est_vars.std(axis=0, ddof=1)
+    
+    lower_bound = np.maximum(est_variances_mean - est_variances_std, 0)
+    upper_bound = est_variances_mean + est_variances_std
 
     # Plotting the results
     plt.figure(figsize=(10, 6))
@@ -33,8 +36,8 @@ def save_results_png(
     plt.plot(new_data, est_variances_mean, label="Mean Est. Variance", alpha=0.6)
     plt.fill_between(
         new_data,
-        est_variances_mean - est_variances_std,
-        est_variances_mean + est_variances_std,
+        lower_bound,
+        upper_bound,
         color="b",
         alpha=0.2,
         label="±1 std",
@@ -42,7 +45,7 @@ def save_results_png(
     plt.title("True Variance of Bagged Predictions Across Simulated Datasets")
     plt.xlabel("x")
     plt.ylabel("Variance")
-    plt.ylim(-0.01, 0.06)
+    #plt.ylim(0.0, 0.06)
     plt.grid(True)
 
     plt.legend()
