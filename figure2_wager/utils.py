@@ -89,18 +89,13 @@ def inf_JK_bagged_variance(
     """
 
     B, n_data_points = N_bi.shape
-    n_preds = T_N_b.shape[1]
     T_N_star_mean = np.mean(T_N_b, axis=0)
 
-    # Compute the covariance vector without explicitly creating a large covariance matrix
     cov_vector = np.sum(
         ((N_bi - 1).T @ (T_N_b - T_N_star_mean))**2, axis=0
     ) / (B - 1)**2
 
-    # Bias correction
     bias_correction = (((n_data_points - 1) * B) / (B - 1) ** 2) * np.var(T_N_b, axis=0, ddof=1)
-
-    # Estimate of Jackknife-Infinitesimal Variance for bagged learners
     var_inf_JK_U = cov_vector - bias_correction
 
     return var_inf_JK_U
@@ -123,10 +118,8 @@ def inf_JK_bagged_variance_simple(N_bi: np.ndarray, T_N_b: np.ndarray) -> np.nda
     n_preds = T_N_b.shape[1]
     T_N_star_mean = np.mean(T_N_b, axis=0)
 
-    # Initialize the covariance matrix
     cov_i = np.zeros((n_data_points, n_preds))
 
-    # Fill the covariance matrix
     for i in range(n_data_points):
         for pred in range(n_preds):
 
@@ -135,11 +128,10 @@ def inf_JK_bagged_variance_simple(N_bi: np.ndarray, T_N_b: np.ndarray) -> np.nda
             ) / (B - 1)
     cov_vector = np.sum(cov_i**2, axis=0)
 
-    # Bias correction
     bias_correction = (((n_data_points - 1) * B) / (B - 1) ** 2) * np.var(
         T_N_b, axis=0, ddof=1
     )
-    # Estimate of Jackknife-Infenitesimal Variance for bagged learners
+
     var_inf_JK_U = cov_vector - bias_correction
     return var_inf_JK_U
 
@@ -300,7 +292,6 @@ def simulate_bagging_and_variance(
     if fix_x_points:
         x = np.linspace(0, 1, n)
 
-    # Perform bagging
     tree_predictions_b, N_bi = bagging_decision_trees(
         x=x,
         y_noisy=y_noisy,
