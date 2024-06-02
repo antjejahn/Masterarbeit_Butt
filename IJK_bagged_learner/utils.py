@@ -61,8 +61,8 @@ def save_results_png(
             fontsize=12,
             bbox=dict(facecolor="white", alpha=0.5),
         )
-        
-        directory_path = "IJK_bagged_learner/figures/"+folder_name
+
+        directory_path = "IJK_bagged_learner/figures/" + folder_name
         os.makedirs(directory_path, exist_ok=True)
 
         if fixed_x_points:
@@ -75,6 +75,7 @@ def save_results_png(
                 f"{directory_path}/seed{seed}_nB{B}_new_x_{dt_args.items()}.png",
                 dpi=600,
             )
+
 
 def inf_JK_bagged_variance(
     N_bi: np.ndarray, T_N_b: np.ndarray, weights: np.ndarray = None
@@ -369,17 +370,13 @@ def simulate_bagging_and_variance(
 def save_result_csv(
     fix_x_points, seed, B, args, bagged_preds, est_vars, new_data, folder_name: str
 ):
-    directory_path = "IJK_bagged_learner/results/"+folder_name
+    directory_path = "IJK_bagged_learner/results/" + folder_name
     os.makedirs(directory_path, exist_ok=True)
-    
+
     if fix_x_points:
-        name = (
-            f"{directory_path}/seed{seed}_nB{B}_fixed_x_{args.items()}"
-        )
+        name = f"{directory_path}/seed{seed}_nB{B}_fixed_x_{args.items()}"
     else:
-        name = (
-            f"{directory_path}/seed{seed}_nB{B}_new_x_{args.items()}"
-        )
+        name = f"{directory_path}/seed{seed}_nB{B}_new_x_{args.items()}"
 
     header = ["pred-x-points"] + new_data.tolist()
     combined_data = np.hstack(

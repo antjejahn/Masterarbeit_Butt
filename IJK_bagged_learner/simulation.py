@@ -17,10 +17,10 @@ def main():
 
         ####### Simulation parameters  ############################
         n = 500
-        n_sim = 1_00
-        B = 10_0  # Paper uses 10_000
+        n_sim = 1_000
+        B = 10_000  # Paper uses 10_000
         args = {"max_leaf_nodes": 5}
-        seed = 45
+        seed = 42
         new_data = np.linspace(0, 1, 500)
         ###########################################################
 
