@@ -18,10 +18,10 @@ def create_bootstrap_indices_and_Nbi(n: int, B: int, seed: int = None, weights: 
         return boot_indices, boot_counts
 
 
-def bagging_mean_estimators(x,B,seed):
+def bagging_mean_estimators(x,B,seed, weights):
     n = x.shape[0]
     T_N_b = np.zeros(B)
-    indices_list, N_bi = create_bootstrap_indices_and_Nbi(n=n, B=B, seed=seed)
+    indices_list, N_bi = create_bootstrap_indices_and_Nbi(n=n, B=B, seed=seed, weights=weights)
     
     for b in range(B):
         indices = indices_list[b]
@@ -47,17 +47,16 @@ def inf_JK_bagged_variance_weighted(N_bi, T_N_b, weights, m):
     T_N_b_mean = np.mean(T_N_b, axis=0)
 
     cov_i = ((N_bi - n * weights[0]).T @ (T_N_b- T_N_b_mean)) / B 
-    print(cov_i)
     cov_i_hoch2 = cov_i**2
-    biased_var_estimate = np.sum(cov_i_hoch2, axis=0)
+    biased_var_estimate = np.sum(cov_i_hoch2)
     
-    bias_correction = n/B * (1 - (1/m)) * np.var(T_N_b, axis=0)
+    bias_correction = n/B * (m-1)/m * np.var(T_N_b_mean)
     
     return biased_var_estimate, bias_correction
 
 
 def simulate_bagging_and_ijk_var_calculation(x1, B, seed, sim_i, weights, m ) :
-    T_N_b, N_bi = bagging_mean_estimators(x=x1, B=B, seed=seed+sim_i)
+    T_N_b, N_bi = bagging_mean_estimators(x=x1, B=B, seed=seed+sim_i, weights=weights)
     biased_var_estimate, bias_correction =inf_JK_bagged_variance_weighted(N_bi=N_bi, T_N_b=T_N_b, weights=weights, m=m)
 
     ijk_var_bagged_est = biased_var_estimate - bias_correction
