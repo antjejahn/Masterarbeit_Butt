@@ -92,7 +92,7 @@ def save_results_png(
 
     plt.legend()
 
-    if m is not None:
+    if m is not False:
         plt.text(
             0.0,
             0.2,
