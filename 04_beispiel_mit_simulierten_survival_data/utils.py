@@ -3,9 +3,18 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from lifelines import KaplanMeierFitter
 from sklearn.ensemble import RandomForestClassifier
+from lifelines import KaplanMeierFitter, WeibullAFTFitter
+from sksurv.metrics import concordance_index_ipcw
+from sksurv.util import Surv
+from sklearn.model_selection import train_test_split
+import seaborn as sns
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import RandomizedSearchCV
+from sklearn.ensemble import RandomForestClassifier
 
 
-## Funktion zur Erstellung der simulierten Daten
 def create_surv_data(
     shape_weibull=1.5,
     scale_weibull_base=50,
@@ -113,6 +122,82 @@ def train_test_split_into_df(
     return df_train, df_test
 
 
+def create_train_test_data(params: dict) -> pd.DataFrame:
+
+    ### Parameter für Weibull-Verteilung und Censoring ###
+    shape_weibull = params.get('shape_weibull')
+    scale_weibull_base = params.get('scale_weibull_base')
+    rate_censoring = params.get('rate_censoring')
+    n = params.get('n')
+    b_bloodp = params.get('b_bloodp')
+    b_diab = params.get('b_diab')
+    b_age = params.get('b_age')
+    b_bmi = params.get('b_bmi')
+    b_kreat = params.get('b_kreat')
+    seed = params.get('seed')
+    tau = params.get('tau')
+
+    ### Generierung der Kovariaten ###
+    np.random.seed(seed)
+    bmi = np.random.normal(25, 5, n)
+    blood_pressure = np.random.binomial(1, 0.3, n)
+    kreatinkinase = np.random.lognormal(mean=5, sigma=1, size=n)
+    kreatinkinase = np.clip(kreatinkinase, 30, 8000)
+    diabetes = np.random.binomial(1, 0.2, n)
+    age = np.random.normal(50, 10, n)  #
+
+    ### Weibull-Verteilung ###
+    lambda_weibull = scale_weibull_base * np.exp(
+        b_bloodp * blood_pressure
+        + b_diab * diabetes  # Linearer Einfluss von hohem Blutdruck
+        + b_age * age  # Linearer Einfluss von Diabetes
+        + b_bmi * (bmi - 25) ** 2  # Linearer Einfluss des Alters
+        + b_kreat  # Quadratischer Einfluss des BMI
+        * np.log(kreatinkinase)  # Exponentieller Einfluss der Kreatinkinase
+    )
+
+    ### Generierung der Ereigniszeiten/Zensierzeiten basierend auf der Weibull-/ZensierVerteilung
+    event_times = np.random.weibull(shape_weibull, n) * lambda_weibull
+    censoring_times = np.random.exponential(1 / rate_censoring, n)
+    observed_times = np.minimum(event_times, censoring_times)
+    event_occurred = event_times <= censoring_times
+
+    ### Erstellung des Datensatzes ohne die Transformationen ###
+    data = pd.DataFrame(
+        {
+            "bmi": bmi,
+            "blood_pressure": blood_pressure.astype(int),
+            "kreatinkinase": kreatinkinase,
+            "diabetes": diabetes.astype(int),
+            "age": age,
+            "t": observed_times,
+            "event": event_occurred.astype(int),
+        }
+    )
+    #print("Data shape:", data.shape)
+    #print(f'{(data["event"] ==1).sum()/n  * 100} % of the data has an event')
+
+
+    ### Startified Split ###
+    X = data[['bmi', 'blood_pressure', 'kreatinkinase', 'diabetes', 'age']]
+    y = Surv.from_arrays(event=data['event'], time=data['t'])
+    df_train, df_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=seed)
+    df_train, df_test = train_test_split_into_df(df_train=df_train, df_test=df_test, y_train=y_train, y_test=y_test)
+
+
+    ### cut data at tau // ipcw weights ###
+    kmf = KaplanMeierFitter()
+    kmf.fit(df_train['time'], event_observed=1-df_train['event'])
+    df_train = create_new_dataset_with_ipcw_weights(data=df_train,t=tau, kmf=kmf)
+    df_test = create_new_dataset_with_ipcw_weights(data=df_test,t=tau, kmf=kmf)
+
+    portions_at_cutpoint = df_train['survived'].value_counts(normalize=True)
+    portion_censored_after_cut_train = portions_at_cutpoint[999]
+    n_events_after_cut_train = portions_at_cutpoint[1] * df_train.shape[0] 
+
+    return df_train, df_test, n_events_after_cut_train, portion_censored_after_cut_train
+
+
 def ipc_weighted_mse(y_true, y_pred, sample_weight):
     return np.average((y_true - y_pred) ** 2, weights=sample_weight)
 
@@ -140,3 +225,9 @@ def inf_JK_bagged_variance(
     bias_correction = n / B * (m - 1) / m * np.var(T_N_b, axis=0)
 
     return biased_var_estimate, bias_correction
+
+
+def simulation(n:int, seed:int, sims: int, tau:float, data_generation_weibull_parameters:dict  ):
+
+    df_train, df_test, n_events_after_cut_train, portion_censored_after_cut_train = create_train_test_data(data_generation_weibull_parameters)
+
