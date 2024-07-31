@@ -5,7 +5,7 @@ from lifelines import KaplanMeierFitter
 
 ## Funktion zur Erstellung der simulierten Daten
 def create_surv_data(shape_weibull=1.5, scale_weibull_base=50, rate_censoring=0.02, n=1000, 
-                     b_bloodp=-0.405, b_diab=0.4, b_age=0.05, b_bmi=0.01, b_kreat=0.2, seed=42):
+                     b_bloodp=-0.405, b_diab=0.4, b_age=0.05, b_bmi=0.01, b_kreat=0.2, seed=42) -> pd.DataFrame:
 
     # Parameter für Weibull-Verteilung und Censoring
     shape_weibull = shape_weibull
@@ -57,7 +57,7 @@ def create_surv_data(shape_weibull=1.5, scale_weibull_base=50, rate_censoring=0.
 
 
 
-def create_new_dataset_with_ipcw_weights(data: pd.DataFrame, t: np.float64) -> pd.DataFrame:
+def create_new_dataset_with_ipcw_weights(data: pd.DataFrame, t: np.float64, kmf: KaplanMeierFitter) -> pd.DataFrame:
     new_data = data.copy()
 
     new_data.loc[(data['time'] <= t) & (data['event'] == 1), 'survived'] = int(0)
@@ -67,15 +67,16 @@ def create_new_dataset_with_ipcw_weights(data: pd.DataFrame, t: np.float64) -> p
 
     new_data['survived'] = new_data['survived'].astype(int)
 
-    kmf = KaplanMeierFitter()
-    kmf.fit(new_data['time'], event_observed=1-new_data['event'])
     ipcw_weights =  1/kmf.survival_function_at_times(new_data['time'])
     ipcw_weight_tau = 1/kmf.survival_function_at_times(t)
     new_data['weights_ipcw'] = np.where(new_data['survived']==1, ipcw_weight_tau, np.where(new_data['survived']==0, ipcw_weights, 0))
+    new_data['weights_ipcw'] = new_data['weights_ipcw'] / new_data['weights_ipcw'].sum()
 
     return pd.DataFrame(new_data)
 
-def train_test_split_into_df(df_train, df_test, y_train, y_test):
+
+
+def train_test_split_into_df(df_train: pd.DataFrame, df_test: pd.DataFrame, y_train: np.ndarray, y_test: np.ndarray) -> pd.DataFrame:
 
     df_train.reset_index(drop=True, inplace=True)
     df_test.reset_index(drop=True, inplace=True)
