@@ -37,3 +37,7 @@ Fragen:
 - weibull modell kovariaten anpassen ? falls ja dann nach Anlyse oder mit den Transformationen ?
 - weitere Metriken zur Evaluation ?
 - Wieso ist die Summe der ipcw_Gewichte gleich n  ?
+- wie zeitabhängige kovariate modellieren ?
+
+erst mitteln oder erst wurzel ziehen ?
+konfidenzintervall von was anzeigen?

@@ -289,3 +289,4 @@ def simulation(seed:int, tau:float, data_generation_weibull_parameters:dict, X_p
     del clf, tnb, biased_var_estimate, bias_correction, params_rf
 
     return portion_events_after_cut_train, portion_censored_after_cut_train, portion_no_events_after_cut_train, wb_mse_ipcw, wb_cindex_ipcw, wb_y_pred_X_point, rf_mse_ipcw, rf_y_pred_X_point, rf_std_pred_X_point, ijk_var_pred_X_point
+
