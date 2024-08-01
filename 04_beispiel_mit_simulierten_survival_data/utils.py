@@ -1,18 +1,11 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from lifelines import KaplanMeierFitter
 from sklearn.ensemble import RandomForestClassifier
 from lifelines import KaplanMeierFitter, WeibullAFTFitter
 from sksurv.metrics import concordance_index_ipcw
 from sksurv.util import Surv
 from sklearn.model_selection import train_test_split
-import seaborn as sns
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-from sklearn.model_selection import RandomizedSearchCV
-from sklearn.ensemble import RandomForestClassifier
 
 
 def create_surv_data(
@@ -227,7 +220,67 @@ def inf_JK_bagged_variance(
     return biased_var_estimate, bias_correction
 
 
-def simulation(n:int, seed:int, sims: int, tau:float, data_generation_weibull_parameters:dict  ):
+def simulation(seed:int, tau:float, data_generation_weibull_parameters:dict, X_pred_point:pd.DataFrame, params_rf:dict  ):
 
-    df_train, df_test, n_events_after_cut_train, portion_censored_after_cut_train = create_train_test_data(data_generation_weibull_parameters)
+    ########################################### Dataset Creation ############################################################################################
+    df_train, df_test, n_events_after_cut_train, portion_censored_after_cut_train = create_train_test_data(params=data_generation_weibull_parameters)
 
+    portion_events_after_cut_train = n_events_after_cut_train/df_train.shape[0]
+    portion_no_events_after_cut_train = (1-n_events_after_cut_train/df_train.shape[0]-portion_censored_after_cut_train)
+
+    del n_events_after_cut_train
+
+    ############################################ Weibull Modell ############################################################################################
+    # Fitten des Weibull Modells
+    aft = WeibullAFTFitter()
+    aft.fit(df=df_train.drop(['weights_ipcw', 'survived'], axis=1), 
+            duration_col='time', 
+            event_col='event')
+    
+    # Evaluation auf Testdaten
+    y_pred = aft.predict_survival_function(df=df_test.drop(['weights_ipcw', 'survived','time','event'], axis=1),
+                                           times = tau).iloc[0].tolist()
+    
+    wb_mse_ipcw = ipc_weighted_mse(y_true=df_test['survived'].values, 
+                                   y_pred=y_pred, 
+                                   sample_weight=df_test['weights_ipcw'])
+    
+    wb_cindex_ipcw, concordant, discordant, tied_risk, tied_time = concordance_index_ipcw(
+            survival_train = Surv.from_arrays(event=df_train['event'], time=df_train['time']),
+            survival_test  = Surv.from_arrays(event=df_test['event'], time=df_test['time']),
+            estimate       =  -aft.predict_expectation(df_test) )
+    
+    # Prediction für X_erwartung
+    wb_y_pred_X_point = aft.predict_survival_function(df=X_pred_point, 
+                                                      times = tau).iloc[0].tolist()
+    
+    del aft, y_pred, concordant, discordant, tied_risk, tied_time
+
+    ######################################### Random Forest Modell #########################################################################################
+    # Fitten des Random Forest Modells
+    clf = RandomForestClassifier(**params_rf)
+    clf.fit(    X=df_train.drop(['time', 'event', 'weights_ipcw', 'survived'], axis=1), 
+                y=df_train['survived'], 
+                sample_weight=df_train['weights_ipcw']  )
+
+    # Evaluation auf Testdaten
+    rf_mse_ipcw = ipc_weighted_mse( y_true=df_test['survived'].values, 
+                                    y_pred=clf.predict_proba(df_test.drop(['weights_ipcw', 'survived','time','event'], axis=1))[:,1], 
+                                    sample_weight=df_test['weights_ipcw']   )
+
+    # Prediction für X_erwartung
+    rf_y_pred_X_point = clf.predict_proba(X_pred_point)[:,1]
+
+    # Berechnung der std der Vorhersage auf X_erwartung (= std der prediction der #B trees im RF ) 
+    tnb = np.array([tree.predict_proba(X_pred_point.values)[:, 1][0] for tree in clf.estimators_]) 
+    rf_std_pred_X_point = np.std(tnb)
+
+    # IJK Variance Estimation
+    biased_var_estimate, bias_correction = inf_JK_bagged_variance(  N_bi=get_Nbi(clf.estimators_samples_), 
+                                                                    T_N_b=tnb,
+                                                                    weights=df_train['weights_ipcw']  )
+    ijk_std_pred_X_point = np.sqrt(biased_var_estimate - bias_correction)
+
+    del clf, tnb, biased_var_estimate, bias_correction, params_rf
+
+    return portion_events_after_cut_train, portion_censored_after_cut_train, portion_no_events_after_cut_train, wb_mse_ipcw, wb_cindex_ipcw, wb_y_pred_X_point, rf_mse_ipcw, rf_y_pred_X_point, rf_std_pred_X_point, ijk_std_pred_X_point
