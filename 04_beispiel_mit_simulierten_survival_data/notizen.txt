@@ -13,8 +13,13 @@
 # shape parameter 
 # zeitabhängige kovariate, da weibull modell(zur schätzun )  es schwierieger hat
 
+
+
 # logistic regression theroetische wahre varainz möglich 
 # vergleichen mit empirischer standardabweichung 
+
+
+
 
 # streuung von blanche schätzung varanzschätzer mit streuung von jackknife schätzer vergleichen
 

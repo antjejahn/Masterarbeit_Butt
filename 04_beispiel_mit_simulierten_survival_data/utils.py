@@ -223,6 +223,7 @@ def inf_JK_bagged_variance(
 def simulation(seed:int, tau:float, data_generation_weibull_parameters:dict, X_pred_point:pd.DataFrame, params_rf:dict  ):
 
     ########################################### Dataset Creation ############################################################################################
+    data_generation_weibull_parameters['seed'] = seed
     df_train, df_test, n_events_after_cut_train, portion_censored_after_cut_train = create_train_test_data(params=data_generation_weibull_parameters)
 
     portion_events_after_cut_train = n_events_after_cut_train/df_train.shape[0]
@@ -245,10 +246,13 @@ def simulation(seed:int, tau:float, data_generation_weibull_parameters:dict, X_p
                                    y_pred=y_pred, 
                                    sample_weight=df_test['weights_ipcw'])
     
+
+    df_test2 = df_test.copy()
+    df_test2 = df_test2[df_test2['time']<=df_train['time'].max()]  
     wb_cindex_ipcw, concordant, discordant, tied_risk, tied_time = concordance_index_ipcw(
             survival_train = Surv.from_arrays(event=df_train['event'], time=df_train['time']),
-            survival_test  = Surv.from_arrays(event=df_test['event'], time=df_test['time']),
-            estimate       =  -aft.predict_expectation(df_test) )
+            survival_test  = Surv.from_arrays(event=df_test2['event'], time=df_test2['time']),
+            estimate       =  -aft.predict_expectation(df_test2) )
     
     # Prediction für X_erwartung
     wb_y_pred_X_point = aft.predict_survival_function(df=X_pred_point, 
@@ -258,6 +262,7 @@ def simulation(seed:int, tau:float, data_generation_weibull_parameters:dict, X_p
 
     ######################################### Random Forest Modell #########################################################################################
     # Fitten des Random Forest Modells
+    params_rf['random_state'] = seed
     clf = RandomForestClassifier(**params_rf)
     clf.fit(    X=df_train.drop(['time', 'event', 'weights_ipcw', 'survived'], axis=1), 
                 y=df_train['survived'], 
@@ -279,8 +284,8 @@ def simulation(seed:int, tau:float, data_generation_weibull_parameters:dict, X_p
     biased_var_estimate, bias_correction = inf_JK_bagged_variance(  N_bi=get_Nbi(clf.estimators_samples_), 
                                                                     T_N_b=tnb,
                                                                     weights=df_train['weights_ipcw']  )
-    ijk_std_pred_X_point = np.sqrt(biased_var_estimate - bias_correction)
+    ijk_var_pred_X_point = biased_var_estimate - bias_correction
 
     del clf, tnb, biased_var_estimate, bias_correction, params_rf
 
-    return portion_events_after_cut_train, portion_censored_after_cut_train, portion_no_events_after_cut_train, wb_mse_ipcw, wb_cindex_ipcw, wb_y_pred_X_point, rf_mse_ipcw, rf_y_pred_X_point, rf_std_pred_X_point, ijk_std_pred_X_point
+    return portion_events_after_cut_train, portion_censored_after_cut_train, portion_no_events_after_cut_train, wb_mse_ipcw, wb_cindex_ipcw, wb_y_pred_X_point, rf_mse_ipcw, rf_y_pred_X_point, rf_std_pred_X_point, ijk_var_pred_X_point
