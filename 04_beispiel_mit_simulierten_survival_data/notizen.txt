@@ -41,3 +41,12 @@ Fragen:
 
 erst mitteln oder erst wurzel ziehen ?
 konfidenzintervall von was anzeigen?
+
+wie viel kombinationen von cens_anteil und event_anteil untersuchen?
+
+- trainings und testdaten 70/30   50/50 ?  // jeweils simulieren ?
+- n bei mir 1000,  reicht aus oder so wie registerdaten 5600 ?
+
+- wahre warscheinlichkeit für prediction zum zeitpunkt tau berechnen, oder irrelevant ?
+
+random forest std pred nicht gefunden, die std der trees genommen
