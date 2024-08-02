@@ -50,3 +50,5 @@ wie viel kombinationen von cens_anteil und event_anteil untersuchen?
 - wahre warscheinlichkeit für prediction zum zeitpunkt tau berechnen, oder irrelevant ?
 
 random forest std pred nicht gefunden, die std der trees genommen
+
+- mit B rumspielen

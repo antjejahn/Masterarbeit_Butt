@@ -184,11 +184,17 @@ def create_train_test_data(params: dict) -> pd.DataFrame:
     df_train = create_new_dataset_with_ipcw_weights(data=df_train,t=tau, kmf=kmf)
     df_test = create_new_dataset_with_ipcw_weights(data=df_test,t=tau, kmf=kmf)
 
+    ### calculate portion of events and censored data after cut  for training data ###
     portions_at_cutpoint = df_train['survived'].value_counts(normalize=True)
     portion_censored_after_cut_train = portions_at_cutpoint[999]
     n_events_after_cut_train = portions_at_cutpoint[1] * df_train.shape[0] 
 
-    return df_train, df_test, n_events_after_cut_train, portion_censored_after_cut_train
+    ### calculate portion of events and censored data after cut  for test data ###
+    portions_at_cutpoint_test = df_test['survived'].value_counts(normalize=True)
+    portion_censored_after_cut_test = portions_at_cutpoint_test[999]
+    n_events_after_cut_test = portions_at_cutpoint_test[1] * df_test.shape[0]
+
+    return df_train, df_test, n_events_after_cut_train, portion_censored_after_cut_train, n_events_after_cut_test, portion_censored_after_cut_test
 
 
 def ipc_weighted_mse(y_true, y_pred, sample_weight):
@@ -224,10 +230,17 @@ def simulation(seed:int, tau:float, data_generation_weibull_parameters:dict, X_p
 
     ########################################### Dataset Creation ############################################################################################
     data_generation_weibull_parameters['seed'] = seed
-    df_train, df_test, n_events_after_cut_train, portion_censored_after_cut_train = create_train_test_data(params=data_generation_weibull_parameters)
+    df_train, df_test\
+        , n_events_after_cut_train, portion_censored_after_cut_train\
+        , n_events_after_cut_test, portion_censored_after_cut_test = create_train_test_data(params=data_generation_weibull_parameters)
 
+    #train
     portion_events_after_cut_train = n_events_after_cut_train/df_train.shape[0]
     portion_no_events_after_cut_train = (1-n_events_after_cut_train/df_train.shape[0]-portion_censored_after_cut_train)
+
+    #test
+    portion_events_after_cut_test = n_events_after_cut_test/df_test.shape[0]
+    portion_no_events_after_cut_test = (1-n_events_after_cut_test/df_test.shape[0]-portion_censored_after_cut_test)
 
     del n_events_after_cut_train
 
@@ -288,5 +301,7 @@ def simulation(seed:int, tau:float, data_generation_weibull_parameters:dict, X_p
 
     del clf, tnb, biased_var_estimate, bias_correction, params_rf
 
-    return portion_events_after_cut_train, portion_censored_after_cut_train, portion_no_events_after_cut_train, wb_mse_ipcw, wb_cindex_ipcw, wb_y_pred_X_point, rf_mse_ipcw, rf_y_pred_X_point, rf_std_pred_X_point, ijk_var_pred_X_point
+    return portion_events_after_cut_train, portion_censored_after_cut_train, portion_no_events_after_cut_train,\
+           portion_events_after_cut_test, portion_censored_after_cut_test, portion_no_events_after_cut_test,\
+           wb_mse_ipcw, wb_cindex_ipcw, wb_y_pred_X_point, rf_mse_ipcw, rf_y_pred_X_point, rf_std_pred_X_point, ijk_var_pred_X_point
 
