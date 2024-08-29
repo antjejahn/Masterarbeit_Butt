@@ -8,67 +8,6 @@ from sksurv.util import Surv
 from sklearn.model_selection import train_test_split
 
 
-def create_surv_data(
-    shape_weibull=1.5,
-    scale_weibull_base=50,
-    rate_censoring=0.02,
-    n=1000,
-    b_bloodp=-0.405,
-    b_diab=0.4,
-    b_age=0.05,
-    b_bmi=0.01,
-    b_kreat=0.2,
-    seed=42,
-) -> pd.DataFrame:
-    # Parameter für Weibull-Verteilung und Censoring
-    shape_weibull = shape_weibull
-    scale_weibull_base = scale_weibull_base
-    rate_censoring = rate_censoring
-    n = n
-
-    # Generierung der Kovariaten
-    np.random.seed(seed)
-    bmi = np.random.normal(25, 5, n)
-    blood_pressure = np.random.binomial(1, 0.3, n)
-    kreatinkinase = np.random.lognormal(mean=5, sigma=1, size=n)
-    kreatinkinase = np.clip(kreatinkinase, 30, 8000)
-    diabetes = np.random.binomial(1, 0.2, n)
-    age = np.random.normal(50, 10, n)  #
-
-    # Parameter für Weibull-Verteilung
-    lambda_weibull = scale_weibull_base * np.exp(
-        b_bloodp * blood_pressure
-        + b_diab * diabetes  # Linearer Einfluss von hohem Blutdruck
-        + b_age * age  # Linearer Einfluss von Diabetes
-        + b_bmi * (bmi - 25) ** 2  # Linearer Einfluss des Alters
-        + b_kreat  # Quadratischer Einfluss des BMI
-        * np.log(kreatinkinase)  # Exponentieller Einfluss der Kreatinkinase
-    )
-
-    # Generierung der Ereigniszeiten basierend auf der Weibull-Verteilung
-    event_times = np.random.weibull(shape_weibull, n) * lambda_weibull
-    censoring_times = np.random.exponential(1 / rate_censoring, n)
-    observed_times = np.minimum(event_times, censoring_times)
-    event_occurred = event_times <= censoring_times
-
-    # Erstellung des Datensatzes ohne die nicht-linearen Transformationen
-    data = pd.DataFrame(
-        {
-            "bmi": bmi,
-            "blood_pressure": blood_pressure.astype(int),
-            "kreatinkinase": kreatinkinase,
-            "diabetes": diabetes.astype(int),
-            "age": age,
-            "t": observed_times,
-            "event": event_occurred.astype(int),
-        }
-    )
-
-    print("Data shape:", data.shape)
-    print(f'{(data["event"] ==1).sum()/n  * 100} % of the data has an event')
-
-    return pd.DataFrame(data)
-
 
 def create_new_dataset_with_ipcw_weights(
     data: pd.DataFrame, t: np.float64, kmf: KaplanMeierFitter
@@ -131,13 +70,13 @@ def create_train_test_data(params: dict) -> pd.DataFrame:
     tau = params.get('tau')
 
     ### Generierung der Kovariaten ###
-    np.random.seed(seed)
-    bmi = np.random.normal(25, 5, n)
-    blood_pressure = np.random.binomial(1, 0.3, n)
-    kreatinkinase = np.random.lognormal(mean=5, sigma=1, size=n)
+    rng = np.random.default_rng(seed)
+    bmi = rng.normal(25, 5, n)
+    blood_pressure = rng.binomial(1, 0.3, n)
+    kreatinkinase = rng.lognormal(mean=5, sigma=1, size=n)
     kreatinkinase = np.clip(kreatinkinase, 30, 8000)
-    diabetes = np.random.binomial(1, 0.2, n)
-    age = np.random.normal(50, 10, n)  #
+    diabetes = rng.binomial(1, 0.2, n)
+    age = rng.normal(50, 10, n)  #
 
     ### Weibull-Verteilung ###
     lambda_weibull = scale_weibull_base * np.exp(
@@ -150,8 +89,8 @@ def create_train_test_data(params: dict) -> pd.DataFrame:
     )
 
     ### Generierung der Ereigniszeiten/Zensierzeiten basierend auf der Weibull-/ZensierVerteilung
-    event_times = np.random.weibull(shape_weibull, n) * lambda_weibull
-    censoring_times = np.random.exponential(1 / rate_censoring, n)
+    event_times = rng.weibull(shape_weibull, n) * lambda_weibull
+    censoring_times = rng.exponential(1 / rate_censoring, n)
     observed_times = np.minimum(event_times, censoring_times)
     event_occurred = event_times <= censoring_times
 
@@ -227,7 +166,7 @@ def inf_JK_bagged_variance(
 
 
 def simulation(seed:int, tau:float, data_generation_weibull_parameters:dict, X_pred_point:pd.DataFrame, params_rf:dict, B_first_level: int ,
-               ijk_std_calc: bool, boot_std_calc: bool, train_models: bool ):
+               ijk_std_calc: bool, boot_std_calc: bool, jk_ab_calc: bool,  train_models: bool ):
 
     ########################################### Dataset Creation ############################################################################################
     data_generation_weibull_parameters['seed'] = seed
@@ -336,13 +275,60 @@ def simulation(seed:int, tau:float, data_generation_weibull_parameters:dict, X_p
     else:
         bootstrap_std_pred_X_point = 0.
 
-
-    ### Jackkknife after Bootstrap Variance Estimation UN-WEIGHTED ######################################################################################
-
-    ### IJK Variance estimation UN-WEIGHTED #############################################################################################################
-
-
     return portion_events_after_cut_train, portion_censored_after_cut_train, portion_no_events_after_cut_train,\
            portion_events_after_cut_test, portion_censored_after_cut_test, portion_no_events_after_cut_test,\
            wb_mse_ipcw, wb_cindex_ipcw, wb_y_pred_X_point, rf_mse_ipcw, rf_y_pred_X_point, ijk_var_pred_X_point, bootstrap_std_pred_X_point
+
+
+'''    ### Jackkknife after Bootstrap Variance Estimation UN-WEIGHTED ######################################################################################
+    if jk_ab_calc:
+
+                # Input prediction sample
+        x_pred = np.array([-0.42016338,  0.26413616, -1.64544487, -0.70228821 , 0.51820725]).reshape(1, -1)
+
+        # Precompute predictions for all trees
+        tree_preds = np.array([estimator.predict_proba(x_pred)[0, 1] for estimator in rf.estimators_])
+
+        # Cache the estimators' samples array for efficient reuse
+        estimators_samples = np.array(rf.estimators_samples_, dtype=object)
+
+        # Prepare a boolean mask for each sample's presence in each estimator's bootstrap
+        presence_mask = np.zeros((n_samples, n_estimators), dtype=bool)
+        for i, samples in enumerate(estimators_samples):
+            # Convert the sample list to a NumPy array of integers
+            samples = np.array(samples, dtype=int)
+            presence_mask[samples, i] = True
+
+        # Calculate the theta_is efficiently
+        theta_is = []
+        for ii in range(n_samples):
+            # Use the presence mask to identify trees where sample ii is not in the bootstrap sample
+            indices_without_ii = np.where(~presence_mask[ii])[0]
+
+            # Skip samples that are included in all or none of the trees
+            if 0 < len(indices_without_ii) < n_estimators:
+                # Calculate the mean prediction for these trees
+                theta_is.append(tree_preds[indices_without_ii].mean())
+
+        # Convert theta_is to a NumPy array
+        theta_is = np.array(theta_is)
+
+        # Compute the final variance estimates
+        theta = rf.predict_proba(x_pred)
+        var_jka_biased = np.sum((theta_is - theta[0, 1]) ** 2) * (n_samples - 1) / n_samples
+
+        var_jka_correction = (np.exp(1) - 1) * (n_samples / n_estimators) * np.var(tree_preds)
+        var_jka_unbiased = var_jka_biased - var_jka_correction
+
+        var_jka_unbiased
+
+    else:
+        var_jka_unbiased = 0.
+'''
+        
+
+   
+
+
+
 
