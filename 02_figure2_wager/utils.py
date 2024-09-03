@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import os
 
+
 def step_function(x):
     y_true = np.piecewise(
         x,
@@ -23,7 +24,6 @@ def step_function(x):
 def generate_data(
     x: np.ndarray, seed: int = None, noise_variance=0.25
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-
     rng = np.random.default_rng(seed)
     n_x = x.shape[0]
 
@@ -37,7 +37,6 @@ def generate_data(
 def create_bootstrap_indices_and_Nbi(
     n: int, B: int, seed: int = None, weights: np.ndarray = None
 ):
-
     if weights is None:
         rng = np.random.default_rng(seed)
         boot_indices = rng.choice(np.arange(n), size=(B, n), replace=True)
@@ -63,7 +62,6 @@ def bagging_decision_trees(
     seed: int = None,
     weights: np.ndarray = None,
 ):
-
     n = x.shape[0]
     n_pred = new_data.shape[0]
     tree_predictions_b = np.zeros(shape=(B, n_pred))
@@ -89,7 +87,6 @@ def inf_JK_bagged_variance(
     T_N_b_mean = np.mean(T_N_b, axis=0)
 
     if weights is None:
-
         cov_i = ((N_bi - 1).T @ (T_N_b - T_N_b_mean)) / B
         cov_i_hoch2 = cov_i**2
         biased_var_estimate = np.sum(cov_i_hoch2, axis=0)
@@ -98,7 +95,6 @@ def inf_JK_bagged_variance(
         return biased_var_estimate, bias_correction
 
     else:
-
         cov_i = ((N_bi - n * weights[0]).T @ (T_N_b - T_N_b_mean)) / B
         cov_i_hoch2 = cov_i**2
         biased_var_estimate = np.sum(cov_i_hoch2, axis=0)
@@ -120,7 +116,6 @@ def simulate_bagging_and_variance(
     noise_var_for_generating_data=0.25,
     ijk_calculation=True,
 ):
-
     adjusted_seed = seed + simulation_index
 
     x, y_true, y_noisy = generate_data(
@@ -238,7 +233,6 @@ def save_results_png(
     m: bool = False,
     reduced: bool = False,
 ):
-
     n_simulations = bagged_preds.shape[0]
 
     true_std = bagged_preds.std(axis=0)
@@ -298,7 +292,7 @@ def save_results_png(
                 f"n_train = {m}\nsims = {n_simulations}\nB = {B}",
                 fontsize=12,
                 bbox=dict(facecolor="white", alpha=0.5),
-            ) 
+            )
         else:
             plt.text(
                 0.0,
@@ -307,9 +301,7 @@ def save_results_png(
                 fontsize=12,
                 bbox=dict(facecolor="white", alpha=0.5),
             )
-    
-    
-    
+
     if show_only_plot:
         plt.show()
 
@@ -327,4 +319,3 @@ def save_results_png(
                 f"{directory_path}/seed{seed}_nB{B}_new_x_{dt_args.items()}.png",
                 dpi=600,
             )
-
