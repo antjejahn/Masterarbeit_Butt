@@ -562,3 +562,53 @@ def simulation(
         bootstrap_var_pred_X_point,
         jka_var_unbiased,
     )
+
+
+
+def calculate_true_survival_probability(individual, params, t):
+    (
+        shape_weibull,
+        scale_weibull_base,
+        b_bloodp,
+        b_diab,
+        b_age,
+        b_bmi,
+        b_kreat,
+    ) = (
+        params["shape_weibull"],
+        params["scale_weibull_base"],
+        params["b_bloodp"],
+        params["b_diab"],
+        params["b_age"],
+        params["b_bmi"],
+        params["b_kreat"],
+    )
+
+    # Extrahieren der Kovariaten
+    bmi = individual['bmi'].values[0]
+    blood_pressure = individual['blood_pressure'].values[0]
+    kreatinkinase = individual['kreatinkinase'].values[0]
+    diabetes = individual['diabetes'].values[0]
+    age = individual['age'].values[0]
+
+    # Berechnung des linearen Prädiktors (LP)
+    LP = (
+        b_bloodp * blood_pressure +
+        b_diab * diabetes +
+        b_age * age +
+        b_bmi * (bmi - 25)**2 +
+        b_kreat * np.log(kreatinkinase)
+    )
+
+    # Individueller Skalenparameter lambda
+    lambda_weibull = scale_weibull_base * np.exp(LP)
+
+    # Überlebensfunktion
+    if shape_weibull == 1:
+        # Exponentialverteilung
+        S_t = np.exp(-t / lambda_weibull)
+    else:
+        # Weibull-Verteilung
+        S_t = np.exp(- (t / lambda_weibull) ** shape_weibull)
+
+    return S_t
