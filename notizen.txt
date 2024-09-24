@@ -4,8 +4,6 @@
 
 ## Simulation ##
 
-- wahre prediction berechnen
-
 - erst wurzel und dann varianz ?
 
 - simulation Parameter: 
@@ -14,7 +12,6 @@
     zensierraten  (10, 30, 50, 70, 90 )
 
 - Datengeneration für simulierten datensatz / Weibull  und weibull+exp (S.18 Morris)
-
 
 # logistic regression theroetische wahre varainz möglich 
 # streuung von blanche schätzung varanzschätzer mit streuung von jackknife schätzer vergleichen
