@@ -521,9 +521,10 @@ def simulation(
         biased_var_estimate, bias_correction = calculate_ijk_variance(
             clf=clf, X_pred_point=X_pred_point, df_train=df_train
         )
-        ijk_var_pred_X_point = biased_var_estimate - bias_correction
+
     else:
-        ijk_var_pred_X_point = 0.0
+        biased_var_estimate = 0.0
+        bias_correction = 0.0
 
     ### Jackkknife after Bootstrap Variance Estimation UN-WEIGHTED
     if jk_ab_calc:
@@ -558,7 +559,8 @@ def simulation(
         wb_y_pred_X_point,
         rf_mse_ipcw,
         rf_y_pred_X_point,
-        ijk_var_pred_X_point,
+        biased_var_estimate,
+        bias_correction,
         bootstrap_var_pred_X_point,
         jka_var_unbiased,
     )
