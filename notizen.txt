@@ -1,5 +1,5 @@
 
-### registerdatrem 5600 = n // 85 % tensierung 
+### registerdatrem 9000 = n // 85 % tensierung 
 
 
 ## Simulation ##
@@ -22,3 +22,21 @@
 
 - Implementation logistische regression welches paket ?
 - logistische regression mit 2 klassen aufstellen und nur die samples der 2 klassen geben oder 3 klassen mit allen samples
+
+
+ionen
+
+
+
+- plots erstellen mit den ergebnisssen aus den simulationen
+
+n:1000
+- inf-jk ohne bias korrektur
+- boot after boot ( firstlevel ungewichtet )
+
+
+falls zeit bleibt:
+- boot after boot vs jk-ab mit zensierrate=0
+
+
+Gunter Grieser , 2.gutachter für meine MA email schreiben
