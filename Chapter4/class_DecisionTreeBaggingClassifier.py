@@ -103,3 +103,9 @@ class DecisionTreeBaggingClassifier:
         """
         self.tree_params['random_state'] = random_state
         #print(f"Updated random_state to: {self.tree_params['random_state']}")
+        
+    def get_params(self, deep=True):
+        """
+        [Die Methode bleibt unverändert]
+        """
+        return self.tree_params
