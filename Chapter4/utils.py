@@ -135,7 +135,6 @@ def ipc_weighted_mse(y_true, y_pred, sample_weight):
     """
     return np.average((y_true - y_pred) ** 2, weights=sample_weight)
 
-
 def calculate_ijk_variance(
     clf: DecisionTreeBaggingClassifier, X_pred_point: pd.DataFrame, df_train: pd.DataFrame
 ) -> float:
@@ -228,3 +227,51 @@ def calculate_bootstrap_variance(
 
     # Calculate variance using numpy
     return np.var(preds, ddof=1)
+
+def calculate_jk_after_bootstrap_variance(
+    clf: DecisionTreeBaggingClassifier,
+    X_pred_point: pd.DataFrame,
+    params_rf: dict,
+    df_train: pd.DataFrame,
+) -> float:
+    """
+    Calculates the Jackknife-after-Bootstrap variance (unbiased, if equal weights are used during bootstrapsampling)
+    for a given random forest classifier.
+    Parameters:
+        clf (DecisionTreeBaggingClassifier): The random forest classifier.
+        X_pred_point (pd.DataFrame): The input data point for prediction.
+        params_rf (dict): The parameters of the random forest.
+        df_train (pd.DataFrame): The training dataset.
+    Returns:
+        float: The Jackknife-after-Bootstrap variance.
+    """
+    n_samples = df_train.shape[0]
+
+    # Precompute predictions for all trees
+    tree_preds, theta = clf.predict_proba(X_pred_point.values)
+
+    # Cache the estimators' samples array for efficient reuse
+    estimators_samples = clf.boot_indices
+
+    # Prepare a boolean mask for each sample's presence in each estimator's bootstrap
+    presence_mask = np.zeros((n_samples, params_rf["n_estimators"]), dtype=bool)
+    for i, samples in enumerate(estimators_samples):
+        samples = np.array(samples, dtype=int)
+        presence_mask[samples, i] = True
+
+    theta_is = []
+    for ii in range(n_samples):
+        indices_without_ii = np.where(~presence_mask[ii])[0]
+        if 0 < len(indices_without_ii) < params_rf["n_estimators"]:
+            theta_is.append(tree_preds[indices_without_ii].mean())
+
+    theta_is = np.array(theta_is)
+    var_jka_biased = np.sum((theta_is - theta) ** 2) * (n_samples - 1) / n_samples
+
+    var_jka_correction = (
+        (np.exp(1) - 1)
+        * (n_samples / params_rf["n_estimators"])
+        * np.var(tree_preds, ddof=1)
+    )
+    return var_jka_biased - var_jka_correction
+
