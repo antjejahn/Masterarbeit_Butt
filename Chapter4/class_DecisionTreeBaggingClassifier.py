@@ -8,12 +8,11 @@ class DecisionTreeBaggingClassifier:
     [Die ursprüngliche Klassendokumentation bleibt unverändert]
     """
 
-    def __init__(self, params: dict):
-        """
-        [Die ursprüngliche __init__-Methode bleibt unverändert, mit einer kleinen Ergänzung]
-        """
-        self.n_trees = params.get('n_estimators')
-        self.weighted_bootstrapping = params.get('weighted_bootstrapping')
+    def __init__(self, params: dict = None):
+        if params is None:
+            params = {}
+        self.n_estimators = params.get('n_estimators', 100)  # Default-Wert
+        self.weighted_bootstrapping = params.get('weighted_bootstrapping', False)  # Default-Wert
         self.tree_params = params
         self.trees_ = []
         self.n_jobs = params.get('n_jobs', -1)  # Anzahl der parallelen Jobs (Standard: alle verfügbaren Kerne)
@@ -46,11 +45,11 @@ class DecisionTreeBaggingClassifier:
         # Generiere Bootstrap-Indizes und Zählungen
         if self.weighted_bootstrapping and sample_weights is not None:
             self.boot_indices, self.nbi = self.create_bootstrap_indices_and_Nbi(
-                n=n_samples, B=self.n_trees, weights=sample_weights
+                n=n_samples, B=self.n_estimators, weights=sample_weights
             )
         else:
             self.boot_indices, self.nbi = self.create_bootstrap_indices_and_Nbi(
-                n=n_samples, B=self.n_trees
+                n=n_samples, B=self.n_estimators
             )
         
         # Definiere eine Funktion zum Trainieren eines einzelnen Baums
@@ -70,7 +69,7 @@ class DecisionTreeBaggingClassifier:
 
         # Trainiere die Bäume parallel
         self.trees_ = Parallel(n_jobs=self.n_jobs)(
-            delayed(train_single_tree)(i) for i in range(self.n_trees)
+            delayed(train_single_tree)(i) for i in range(self.n_estimators)
         )
         
         return self
@@ -80,7 +79,7 @@ class DecisionTreeBaggingClassifier:
         [Die Methode bleibt unverändert]
         """
         n_samples = X.shape[0]
-        preds_trees = np.zeros((self.n_trees, n_samples))
+        preds_trees = np.zeros((self.n_estimators, n_samples))
         
         for b, tree in enumerate(self.trees_):
             proba = tree.predict_proba(X)
@@ -109,3 +108,16 @@ class DecisionTreeBaggingClassifier:
         [Die Methode bleibt unverändert]
         """
         return self.tree_params
+    
+    def set_params(self, **params):
+        """
+        Setzt die Parameter für den Classifier.
+        """
+        for key, value in params.items():
+            if key in self.tree_params:
+                self.tree_params[key] = value
+            elif key == "n_estimators":
+                self.n_estimators = value
+            elif key == "weighted_bootstrapping":
+                self.weighted_bootstrapping = value
+        return self
