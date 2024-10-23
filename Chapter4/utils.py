@@ -1,10 +1,6 @@
 import numpy as np
 import pandas as pd
 from lifelines import KaplanMeierFitter
-from lifelines import KaplanMeierFitter, WeibullAFTFitter
-from sksurv.metrics import concordance_index_ipcw
-from sksurv.util import Surv
-from sklearn.model_selection import train_test_split
 from class_DecisionTreeBaggingClassifier import DecisionTreeBaggingClassifier
 
 
@@ -69,7 +65,6 @@ def create_new_dataset_with_ipcw_weights(
 
     )
 
-
 def ipc_weighted_mse(y_true, y_pred, sample_weight):
     """
     Calculates the weighted mean squared error (MSE) between the true values and the predicted values.
@@ -86,7 +81,7 @@ def ipc_weighted_mse(y_true, y_pred, sample_weight):
     return np.average((y_true - y_pred) ** 2, weights=sample_weight)
 
 def calculate_ijk_variance(
-    clf: DecisionTreeBaggingClassifier, X_pred_point: pd.DataFrame, df_train: pd.DataFrame
+    clf: DecisionTreeBaggingClassifier, X_pred_point, df_train: pd.DataFrame
 ) -> float:
     """
     Calculates the biased variance estimate and bias correction for a given random forest classifier,
@@ -100,7 +95,7 @@ def calculate_ijk_variance(
     - bias_correction: The bias correction.
     """
 
-    T_N_b, pred = clf.predict_proba(X_pred_point.values)
+    T_N_b, pred = clf.predict_proba(X_pred_point)
     N_bi = clf.nbi
     weights = df_train["weights_ipcw"]
     B, n = N_bi.shape
@@ -117,70 +112,80 @@ def calculate_ijk_variance(
     return biased_var_estimate, bias_correction
 
 def calculate_bootstrap_variance(
-    X_pred_point: pd.DataFrame,
-    params_rf: dict,
-    df_train: pd.DataFrame,
-    seed: int,
-    B_first_level: int,
-    tau: np.float64,
-) -> float:
-    """
-    Calculate the bootstrap variance of predictions using random forest classifier.
-    Parameters:
-        X_pred_point (pd.DataFrame): The input data for prediction.
-        params_rf (dict): The parameters for the random forest classifier.
-        df_train (pd.DataFrame): The training dataset.
-        seed (int): The seed for random number generation.
-        B_first_level (int): The number of bootstrap samples.
-        tau (np.float64): The time point for IPCW weights.
-    Returns:
-        float: The bootstrap variance of predictions.
-    """
+    df2,
+    seed ,
+    B_first_level,
+    tau ,
+    params_rf,
+    x_high_patient,
+    x_low_patient,
+    x_mean_patient):
 
-    np_train = df_train.values
-    df_train_columns_name = df_train.columns
-    preds = np.empty(B_first_level)
 
-    # Generate firstlevel bootstrapped indices
-    df = create_new_dataset_with_ipcw_weights(data=df_train, t=tau)
-    
-    
     rng = np.random.default_rng(seed)
-    first_level_boot_indices = rng.choice(
-        a=np.arange(df_train.shape[0]), size=(B_first_level, df_train.shape[0]), replace=True
-    )
-    
+    first_level_boot_indices = rng.choice(a=np.arange(df2.shape[0]), size=(B_first_level, df2.shape[0]), replace=True)
+
+    preds_low = np.empty(B_first_level)
+    preds_high = np.empty(B_first_level)
+    preds_mean = np.empty(B_first_level)
+
     for b in range(B_first_level):
-
-        np_train_boot = np_train[first_level_boot_indices[b], :]
-
-        # Create the new dataset with IPCW weights
-        df_train_boot = create_new_dataset_with_ipcw_weights(
-            data=pd.DataFrame(np_train_boot, columns=df_train_columns_name), t=tau
+        df = df2.iloc[np.array(first_level_boot_indices[b])]
+        # Fit Kaplan-Meier estimator on training data
+        kmf = KaplanMeierFitter()
+        kmf.fit(
+            durations=df["time"].astype(float),
+            event_observed=1 - df["event"].astype(bool),
         )
+        
+        # Compute IPCW weights for  data
+        df_train,n_events_after_cut, portion_censored_after_cut = create_new_dataset_with_ipcw_weights(df, t=tau, kmf=kmf)
 
-        # Set the random state and fit the classifier
+        # Create dummy variables
+        df_train_dummy = pd.get_dummies(df_train, drop_first=True)
+
+        # Prepare features and target
+        X_train = df_train_dummy.drop(["time", "event", "weights_ipcw", "survived"], axis=1).values
+        y_train = df_train_dummy["survived"].values
+        sample_weights_train = df_train_dummy["weights_ipcw"].values
+        
+        # Train model
         clf = DecisionTreeBaggingClassifier(params_rf)
-        clf.set_random_state(random_state=seed + 1000+ b )
+        clf.fit(X_train, y_train, sample_weights=sample_weights_train)
         
-        clf.fit(
-            X=df_train_boot.drop(
-                ["time", "event", "weights_ipcw", "survived"], axis=1
-            ).values,
-            y=df_train_boot["survived"].values,
-            sample_weights=df_train_boot["weights_ipcw"].values,
-        )
+        # Prepare features for prediction
+        low_patient_dummy = pd.get_dummies(x_low_patient, drop_first=False)
+        low_patient_dummy = low_patient_dummy.reindex(columns=df_train_dummy.columns, fill_value=False)
+        X_low_patient = low_patient_dummy.drop(
+        ["time", "event", "weights_ipcw", "survived"], axis=1, errors='ignore').values
         
-        # Predict and store result
-        _ ,pred = clf.predict_proba(X_pred_point.values)
-        preds[b] = pred[0]
+        high_patient_dummy = pd.get_dummies(x_high_patient, drop_first=False)
+        high_patient_dummy = high_patient_dummy.reindex(columns=df_train_dummy.columns, fill_value=False)
+        X_high_patient = high_patient_dummy.drop(
+        ["time", "event", "weights_ipcw", "survived"], axis=1, errors='ignore').values
+        
+        mean_patient_dummy = pd.get_dummies(x_mean_patient, drop_first=False)
+        mean_patient_dummy = mean_patient_dummy.reindex(columns=df_train_dummy.columns, fill_value=False)
+        X_mean_patient = mean_patient_dummy.drop(
+        ["time", "event", "weights_ipcw", "survived"], axis=1, errors='ignore').values
+
+        
+        # Predict probabilities
+        _, pred_low = clf.predict_proba(X_low_patient)
+        _, pred_high = clf.predict_proba(X_high_patient)
+        _, pred_mean = clf.predict_proba(X_mean_patient)
+        
+        preds_low[b]  = pred_low[0]
+        preds_high[b] = pred_high[0]
+        preds_mean[b] = pred_mean[0]
+
 
     # Calculate variance using numpy
-    return np.var(preds, ddof=1)
+    return np.var(preds_low, ddof=1), np.var(preds_mean, ddof=1), np.var(preds_high, ddof=1)
 
 def calculate_jk_after_bootstrap_variance(
     clf: DecisionTreeBaggingClassifier,
-    X_pred_point: pd.DataFrame,
+    X_pred_point,
     params_rf: dict,
     df_train: pd.DataFrame,
 ) -> float:
@@ -198,7 +203,7 @@ def calculate_jk_after_bootstrap_variance(
     n_samples = df_train.shape[0]
 
     # Precompute predictions for all trees
-    tree_preds, theta = clf.predict_proba(X_pred_point.values)
+    tree_preds, theta = clf.predict_proba(X_pred_point)
 
     # Cache the estimators' samples array for efficient reuse
     estimators_samples = clf.boot_indices
