@@ -1,0 +1,61 @@
+### Model 
+params_rf = {   'n_estimators':8000,                        
+                'max_depth':10,
+                'min_samples_split':40,
+                'max_features': 'sqrt',
+                'random_state':  42,
+                'weighted_bootstrapping': True, }
+tau = 3*365
+
+-------------------------------------------------------------
+## Patients Covariates
+Index(['time', 'event', 'donor_age_years', 'donor_sex', 'donor_height_cm',
+       'donor_weight_kg', 'donor_creatinin_umol_per_l', 'donor_diabetes',
+       'donor_hypertension', 'donor_smoking', 'donor_hcv',
+       'recipient_age_years', 'recipient_sex', 'recipient_height_cm',
+       'recipient_weight_kg', 'recipient_bloodtransfusion',
+       'recipient_dialysis_years', 'recipient_hcv', 'recipient_pra',
+       'transplant_cold_ischemia_time_min', 'destination'],
+      dtype='object')
+
+low_patient:
+array([[145.0, 1, 76.0, 'male', 157.0, 68.0, 70.9, True, True, False,
+        False, 72.69815195071868, 'male', 178.0, 117.0, True,
+        4.120465434633813, False, False, 538, 'Regional']], dtype=object)
+
+mean Patient:
+array([[1826.25, 0, 57.0, 'male', 175.0, 78.0, 25.6, False, False, False,
+        False, 52.77481177275838, 'male', 173.0, 84.0, False,
+        4.884325804243669, False, False, 829, 'Regional']], dtype=object)
+
+high Patient:
+array([[1319.0, 0, 18.0, 'male', 175.0, 65.0, 54.8, True, False, False,
+        False, 49.51129363449692, 'female', 175.0, 61.0, False,
+        8.279260780287474, False, False, 565, 'Regional']], dtype=object)
+
+-------------------------------------------------------------
+
+
+Überlebenswarscheinlichkeit für Durchschnittspatienten: 89.44 %
+Überlebenswarscheinlichkeit für geringe Überlebenswarscheinlichkeit : 40.83 %
+Überlebenswarscheinlichkeit für hohe Überlebenswarscheinlichkeit: 95.03 %
+
+
+STD- IJK-U  für Patient mit low Überlebenswarscheinlichkeit: 0.0362
+STD- IJK-U für Patient mit mean Überlebenswarscheinlichkeit: 0.0185
+STD- IJK-U für Patient mit high Überlebenswarscheinlichkeit: 0.002
+
+STD- IJK  für Patient mit low Überlebenswarscheinlichkeit: 0.3794
+STD- IJK für Patient mit mean Überlebenswarscheinlichkeit: 0.1156
+STD- IJK für Patient mit high Überlebenswarscheinlichkeit: 0.0655
+
+STD- JK  für Patient mit low Überlebenswarscheinlichkeit: 0.2054
+STD- JK für Patient mit mean Überlebenswarscheinlichkeit: 0.0621
+STD- JK für Patient mit high Überlebenswarscheinlichkeit: 0.0353
+
+
+STD- Boot  für Patient mit low Überlebenswarscheinlichkeit: 0.0393
+STD- Boot  für Patient mit mean Überlebenswarscheinlichkeit: 0.0121
+STD- Boot  für Patient mit high Überlebenswarscheinlichkeit: 0.0051
+
+
