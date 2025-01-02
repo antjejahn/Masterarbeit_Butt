@@ -73,7 +73,6 @@ def create_train_test_data(params: dict) -> pd.DataFrame:
             - b_diab (float): Coefficient for diabetes in the Weibull distribution.
             - b_age (float): Coefficient for age in the Weibull distribution.
             - b_bmi (float): Coefficient for BMI in the Weibull distribution.
-            - b_kreat (float): Coefficient for kreatinkinase in the Weibull distribution.
             - seed (int): Random seed.
             - tau (float): Cut-off time for data.
     Returns:
@@ -107,7 +106,6 @@ def create_train_test_data(params: dict) -> pd.DataFrame:
         params["b_diab"],
         params["b_age"],
         params["b_bmi"],
-        params["b_kreat"],
         params["seed"],
         params["tau"],
     )
@@ -116,19 +114,15 @@ def create_train_test_data(params: dict) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
     bmi = rng.normal(25, 5, n)
     blood_pressure = rng.binomial(1, 0.3, n)
-    kreatinkinase = rng.lognormal(mean=5, sigma=1, size=n)
-    kreatinkinase = np.clip(kreatinkinase, 30, 8000)
     diabetes = rng.binomial(1, 0.2, n)
     age = rng.normal(50, 10, n)  #
 
     # Lambda Weibull
     lambda_weibull = scale_weibull_base * np.exp(
-        b_bloodp * blood_pressure
-        + b_diab * diabetes  # Linearer Einfluss von hohem Blutdruck
-        + b_age * age  # Linearer Einfluss von Diabetes
-        + b_bmi * (bmi - 25) ** 2  # Linearer Einfluss des Alters
-        + b_kreat  # Quadratischer Einfluss des BMI
-        * np.log(kreatinkinase)  # Exponentieller Einfluss der Kreatinkinase
+          b_bloodp * blood_pressure
+        + b_diab * diabetes  
+        + b_age * age 
+        + b_bmi * bmi 
     )
 
     # Ereigniszeiten und Zensierzeiten
@@ -142,7 +136,6 @@ def create_train_test_data(params: dict) -> pd.DataFrame:
         {
             "bmi": bmi,
             "blood_pressure": blood_pressure.astype(int),
-            "kreatinkinase": kreatinkinase,
             "diabetes": diabetes.astype(int),
             "age": age,
             "t": observed_times,
@@ -151,7 +144,7 @@ def create_train_test_data(params: dict) -> pd.DataFrame:
     )
 
     ### Startified Split in Train und Testdaten #################################################################
-    X = data[["bmi", "blood_pressure", "kreatinkinase", "diabetes", "age"]]
+    X = data[["bmi", "blood_pressure", "diabetes", "age"]]
     y = Surv.from_arrays(event=data["event"], time=data["t"])
     df_train, df_test, y_train, y_test = train_test_split(
         X, y, test_size=0.3, random_state=seed
@@ -614,3 +607,109 @@ def calculate_true_survival_probability(individual, params, t):
         S_t = np.exp(- (t / lambda_weibull) ** shape_weibull)
 
     return S_t
+
+
+
+def create_weibull_data(params: dict, random_state: int) -> pd.DataFrame:
+
+    (shape_weibull, scale_weibull_base, rate_censoring, n, p_1, p_2, p_3, p_4) = (
+        params["shape_weibull"],
+        params["scale_weibull_base"],
+        params["rate_censoring"],
+        params["n"],
+        params["p_1"], 
+        params["p_2"],
+        params["p_3"],
+        params["p_4"], )
+
+    # Kovariaten
+    rng = np.random.default_rng(random_state)
+    X_1 = rng.binomial(1, 0.3, n)
+    X_2 = rng.binomial(1, 0.2, n)
+    X_3 = rng.normal(80, 10, n)  
+    X_4 = rng.normal(40, 5, n)
+
+    # Lambda Weibull
+    lambda_weibull = scale_weibull_base * np.exp(
+        p_1 * X_1
+        + p_2 * X_2  
+        + p_3 * X_3 
+        + p_4 * X_4 
+    )
+
+    # Ereigniszeiten und Zensierzeiten
+    event_times = rng.weibull(shape_weibull, n) * lambda_weibull
+    censoring_times = rng.exponential(1 / rate_censoring, n)
+    observed_times = np.minimum(event_times, censoring_times)
+    event_occurred = event_times <= censoring_times
+
+    # Erstellung des Datensatzes
+    data = pd.DataFrame(
+        {
+            "X_1": X_1.astype(int),
+            "X_2": X_2.astype(int),
+            "X_3": X_3,
+            "X_4": X_4,
+            "time": observed_times,
+            "event": event_occurred.astype(int),
+        }
+    )
+
+    return data 
+
+def stratified_split(data: pd.DataFrame, random_state: int, test_size = 0.3 ) -> pd.DataFrame:
+
+    ## Startified Split in Train und Testdaten
+    X = data[["X_1", "X_2", "X_3","X_4"]]
+    y = Surv.from_arrays(event=data["event"], time=data["time"])
+    df_train, df_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=random_state, stratify=data["event"]
+    )
+
+    # Transform to DataFrame
+    df_train.reset_index(drop=True, inplace=True)
+    df_test.reset_index(drop=True, inplace=True)
+
+    y_train_df = pd.DataFrame(y_train, columns=["event", "time"])
+    y_test_df  = pd.DataFrame(y_test, columns=["event", "time"])
+
+    df_train[["event", "time"]] = y_train_df[["event", "time"]]
+    df_test[["event", "time"]] = y_test_df[["event", "time"]]
+
+    return df_train, df_test
+
+def create_data_with_ipc_weights(tau: int, data: pd.DataFrame) -> pd.DataFrame:
+
+    # Fit the Kaplan-Meier estimator
+    kmf = KaplanMeierFitter()
+    kmf.fit(np.array(data["time"],dtype=float), event_observed=  np.array(1 - data["event"],dtype=bool))
+
+    # Efficiently calculate the 'survived' column using np.select for vectorized operations
+    conditions = [
+        (data["time"] <= tau) & (data["event"] == 1),
+        (data["time"] >= tau),
+        (data["time"] <= tau) & (data["event"] == 0),
+    ]
+    choices = [0, 1, 999]
+    data["survived"] = np.select(conditions, choices, default=999)
+
+    # Calculate the IPCW weights
+    survival_times = data["time"]
+    survival_probabilities = kmf.survival_function_at_times(
+        survival_times
+    ).values.flatten()
+    ipcw_weights = 1 / survival_probabilities
+    ipcw_weight_tau = 1 / kmf.survival_function_at_times(tau).values.flatten()[0]
+
+    # Apply weights based on the 'survived' column
+    data["weights_ipcw"] = np.where(
+        data["survived"] == 1,
+        ipcw_weight_tau,
+        np.where(data["survived"] == 0, ipcw_weights, 0),
+    )
+
+    # Normalize the weights
+    data["weights_ipcw"] /= data["weights_ipcw"].sum()
+
+    return data
+
