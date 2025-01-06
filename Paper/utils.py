@@ -125,7 +125,7 @@ def create_weibull_data(params: dict, random_state: int) -> pd.DataFrame:
 
     # Lambda Weibull
     lambda_weibull = scale_weibull_base * np.exp(
-        p_1 * X_1
+          p_1 * X_1
         + p_2 * X_2  
         + p_3 * X_3 
         + p_4 * X_4 
@@ -374,6 +374,7 @@ def simulation(
         ijk_butt_var,
         ijk2_butt_var,
         boot_var,
-        portion_zero_weights_train,
+        df_train['survived'].value_counts(normalize=True),
+        df_test['survived'].value_counts(normalize=True),
         calculate_true_survival_probability(X_pred_point, data_generation_parameter),
     )
