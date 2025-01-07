@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 from class_DecisionTreeBaggingClassifier import DecisionTreeBaggingClassifier
 
 
-def calculate_ijk_variance(
+def calculate_ijk_butt_variance(
     clf: DecisionTreeBaggingClassifier, X_pred_point: pd.DataFrame, df_train: pd.DataFrame
 ) -> float:
     """
@@ -24,6 +24,69 @@ def calculate_ijk_variance(
 
     T_N_b, pred = clf.predict_proba(X_pred_point.values)
     N_bi = clf.nbi
+    weights = df_train["weights_ipcw"]
+    B, n = N_bi.shape
+    T_N_b_mean = np.mean(T_N_b, axis=0)
+
+    cov_i = ((N_bi - n * weights.values.reshape(1,-1)).T @ (T_N_b - T_N_b_mean)) / B
+    cov_i_hoch2 = cov_i**2
+    array = cov_i_hoch2/weights.values.reshape(-1,1)
+
+    biased_var_estimate = np.sum(array[~np.isnan(array) & ~np.isinf(array)], axis=0) * np.sum(weights**2)
+
+    bias_correction = n / B * np.sum(1-weights[weights > 0]) * np.var(T_N_b, axis=0, ddof=1)* np.sum(weights**2)
+
+    return biased_var_estimate-bias_correction
+
+def calculate_ijk2_butt_variance(
+    clf: DecisionTreeBaggingClassifier, X_pred_point: pd.DataFrame, df_train: pd.DataFrame
+) -> float:
+    """
+    Calculates the biased variance estimate and bias correction for a given random forest classifier,
+    prediction point, and training data.
+    Parameters:
+    - clf: The classifier object used for prediction.
+    - X_pred_point: The prediction point as a pandas DataFrame.
+    - df_train: The training data as a pandas DataFrame.
+    Returns:
+    - biased_var_estimate: The biased variance estimate.
+    - bias_correction: The bias correction.
+    """
+
+    T_N_b, pred = clf.predict_proba(X_pred_point.values)
+    N_bi = clf.nbi
+    weights = df_train["weights_ipcw"]
+    B, n = N_bi.shape
+    T_N_b_mean = np.mean(T_N_b, axis=0)
+
+    cov_i = ((N_bi - n * weights.values.reshape(1,-1)).T @ (T_N_b - T_N_b_mean)) / B
+    cov_i_hoch2 = cov_i**2
+    array = cov_i_hoch2/((weights.values.reshape(-1,1))**2)
+
+    biased_var_estimate = np.sum(array[~np.isnan(array) & ~np.isinf(array)], axis=0) * (1/(np.sum(weights > 0))**2)
+
+    bias_correction = n / B * (1/np.sum(weights > 0)**2) * np.var(T_N_b, axis=0, ddof=1)* np.sum(1/(weights[weights > 0]) -1)
+
+    return biased_var_estimate-bias_correction
+
+def calculate_ijk_wager_variance(
+    clf: DecisionTreeBaggingClassifier, X_pred_point: pd.DataFrame, df_train: pd.DataFrame
+) -> float:
+    """
+    Calculates the biased variance estimate and bias correction for a given random forest classifier,
+    prediction point, and training data.
+    Parameters:
+    - clf: The classifier object used for prediction.
+    - X_pred_point: The prediction point as a pandas DataFrame.
+    - df_train: The training data as a pandas DataFrame.
+    Returns:
+    - biased_var_estimate: The biased variance estimate.
+    - bias_correction: The bias correction.
+    """
+
+    T_N_b, pred = clf.predict_proba(X_pred_point.values)
+    N_bi = clf.nbi
+    df_train["weights_ipcw"] = 1 / df_train.shape[0]
     weights = df_train["weights_ipcw"]
     B, n = N_bi.shape
     T_N_b_mean = np.mean(T_N_b, axis=0)
@@ -100,6 +163,7 @@ def calculate_bootstrap_variance(
 
     # Calculate variance using numpy
     return np.var(preds, ddof=1)
+
 
 
 #########################################################################################################
@@ -333,14 +397,10 @@ def simulation(
 
     #### Variance Estimation ####
     ### Wager
-    if ijk_wager_calc:
-        ijk_wager_var = 0  #################### !!!!!!!!!!!!!!!!!!!
-    else:
-        ijk_wager_var = 0.0
 
     ### Butt
     if ijk_butt_calc:
-        ijk_butt_var = calculate_ijk_variance(
+        ijk_butt_var = calculate_ijk_butt_variance(
             clf=clf, X_pred_point=X_pred_point, df_train=df_train
         )
     else:
@@ -348,9 +408,18 @@ def simulation(
 
     ### Butt2
     if ijk2_butt_calc:
-        ijk2_butt_var = 0  #################### !!!!!!!!!!!!!!!!!!!
+        ijk2_butt_var =   calculate_ijk2_butt_variance(
+            clf=clf, X_pred_point=X_pred_point, df_train=df_train
+        )
     else:
         ijk2_butt_var = 0.0
+
+    if ijk_wager_calc:
+        ijk_wager_var = calculate_ijk_wager_variance(
+            clf=clf, X_pred_point=X_pred_point, df_train=df_train
+        )
+    else:
+        ijk_wager_var = 0.0
 
     ### boot
     if boot_calc:
