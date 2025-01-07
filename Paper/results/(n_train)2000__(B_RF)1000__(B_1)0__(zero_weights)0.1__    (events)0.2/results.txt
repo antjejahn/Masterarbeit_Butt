@@ -7,17 +7,17 @@ WB_pred_S rel_bias : 0.04 %
 RF_pred_S rel_bias : 0.24 %
 
 ### VAR Results - variante 1 ###
-ijk_wager rel_bias :  -0.37 %
-ijk_butt rel_bias :   -0.37 %
-ijk2_butt rel_bias :  -0.37 %
-boot rel_bias :       -100.00 %
+ijk_wager rel_bias :  -0.37 %            -- emp std: 0.011254410139534418
+ijk_butt rel_bias :   1.49 %            -- emp std: 0.011384574290833322           
+ijk2_butt rel_bias :  3.33 %            -- emp std: 0.011517341715352914          
+boot rel_bias :       -100.00 %            -- emp std: 0.0          
 
 
 ### VAR Results - variante 2 ###
-ijk_wager rel_bias :  -0.57 %
-ijk_butt rel_bias :   -0.57 %
-ijk2_butt rel_bias :  -0.57 %
-boot rel_bias :       -100.00 %
+ijk_wager rel_bias :  -0.57 %            -- emp std: 0.011312769838328624
+ijk_butt rel_bias :   1.38 %            -- emp std: 0.011414659410840822           
+ijk2_butt rel_bias :  3.33 %            -- emp std: 0.011517341715352914          
+boot rel_bias :       -100.00  %            -- emp std: 0.0          
 
 
 ### Simulation Parameters: ###
