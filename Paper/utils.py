@@ -36,7 +36,7 @@ def calculate_ijk_butt_variance(
 
     bias_correction = n / B * np.sum(1-weights[weights > 0]) * np.var(T_N_b, axis=0, ddof=1)* np.sum(weights**2)
 
-    return biased_var_estimate-bias_correction
+    return biased_var_estimate - bias_correction
 
 def calculate_ijk2_butt_variance(
     clf: DecisionTreeBaggingClassifier, X_pred_point: pd.DataFrame, df_train: pd.DataFrame
