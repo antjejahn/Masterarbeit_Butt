@@ -6,70 +6,59 @@ from sklearn.model_selection import train_test_split
 from class_DecisionTreeBaggingClassifier import DecisionTreeBaggingClassifier
 import os, json
 import matplotlib.pyplot as plt
-
+import warnings
 
 #########################################################################################################
 ' Variance Estmators '
 def calculate_ijk_butt_variance(
     clf: DecisionTreeBaggingClassifier, X_pred_point: pd.DataFrame, df_train: pd.DataFrame
 ) -> float:
-    """
-    Calculates the biased variance estimate and bias correction for a given random forest classifier,
-    prediction point, and training data.
-    Parameters:
-    - clf: The classifier object used for prediction.
-    - X_pred_point: The prediction point as a pandas DataFrame.
-    - df_train: The training data as a pandas DataFrame.
-    Returns:
-    - biased_var_estimate: The biased variance estimate.
-    - bias_correction: The bias correction.
-    """
 
     T_N_b, pred = clf.predict_proba(X_pred_point.values)
     N_bi = clf.nbi
     weights = df_train["weights_ipcw"]
     B, n = N_bi.shape
-    T_N_b_mean = np.mean(T_N_b, axis=0)
 
-    cov_i = ((N_bi - n * weights.values.reshape(1,-1)).T @ (T_N_b - T_N_b_mean)) / B
+    cov_i = ((N_bi - n * weights.values.reshape(1,-1)).T @ (T_N_b - pred)) / B
     cov_i_hoch2 = cov_i**2
     array = cov_i_hoch2/weights.values.reshape(-1,1)
 
     biased_var_estimate = np.sum(array[~np.isnan(array) & ~np.isinf(array)], axis=0) * np.sum(weights**2)
 
     bias_correction = n / B * np.sum(1-weights[weights > 0]) * np.var(T_N_b, axis=0, ddof=1)* np.sum(weights**2)
-    bias_correction2 = 0.0
+
+    cov_i__ =  (((N_bi - n * weights.values.reshape(1,-1))**2).T @ (T_N_b - pred)**2) / B
+
+    aa = ((weights * (1-weights) * n * np.var(T_N_b, axis=0, ddof=1)).values.reshape(-1,1) + cov_i__ - cov_i_hoch2 ) / weights.values.reshape(-1,1)
+
+    bias_correction2 = np.sum(weights**2) * 1/B  * np.sum(aa[~np.isnan(aa) & ~np.isinf(aa)], axis=0) 
+
     return biased_var_estimate , bias_correction[0], bias_correction2
 
 def calculate_ijk_jahn_variance(
     clf: DecisionTreeBaggingClassifier, X_pred_point: pd.DataFrame, df_train: pd.DataFrame
 ) -> float:
-    """
-    Calculates the biased variance estimate and bias correction for a given random forest classifier,
-    prediction point, and training data.
-    Parameters:
-    - clf: The classifier object used for prediction.
-    - X_pred_point: The prediction point as a pandas DataFrame.
-    - df_train: The training data as a pandas DataFrame.
-    Returns:
-    - biased_var_estimate: The biased variance estimate.
-    - bias_correction: The bias correction.
-    """
 
     T_N_b, pred = clf.predict_proba(X_pred_point.values)
     N_bi = clf.nbi
     weights = df_train["weights_ipcw"]
     B, n = N_bi.shape
-    T_N_b_mean = np.mean(T_N_b, axis=0)
+    n_plus = np.sum(weights > 0)
 
-    cov_i = ((N_bi - n * weights.values.reshape(1,-1)).T @ (T_N_b - T_N_b_mean)) / B
+    cov_i = ((N_bi - n * weights.values.reshape(1,-1)).T @ (T_N_b - pred)) / B
     cov_i_hoch2 = cov_i**2
     array = cov_i_hoch2/((weights.values.reshape(-1,1))**2)
 
     biased_var_estimate = np.sum(array[~np.isnan(array) & ~np.isinf(array)], axis=0) * (1/(np.sum(weights > 0))**2)
 
-    bias_correction = n / B * (1/np.sum(weights > 0)**2) * np.var(T_N_b, axis=0, ddof=1)* np.sum(1/(weights[weights > 0]) -1)
-    bias_correction2 = 0.0
+    bias_correction =  (1/n_plus**2)  * np.var(T_N_b, axis=0, ddof=1)* n / B * np.sum( ( 1 / (weights[weights > 0] ) ) -1) 
+
+    cov_i__ =  (((N_bi - n * weights.values.reshape(1,-1))**2).T @ (T_N_b - pred)**2) / B
+
+    aa = ((weights * (1-weights) * n * np.var(T_N_b, axis=0, ddof=1)).values.reshape(-1,1) + cov_i__ - cov_i_hoch2 ) / (weights**2).values.reshape(-1,1)
+
+    bias_correction2 = (1/n_plus**2)  * 1/B  * np.sum(aa[~np.isnan(aa) & ~np.isinf(aa)], axis=0)   
+  
     return biased_var_estimate , bias_correction[0], bias_correction2
 
 def calculate_ijk_wager_variance(
@@ -139,9 +128,49 @@ def calculate_jk_variance(
 
     return 0.0 , 0.0
 
-def calculate_bootstrap_variance(B_1: int) -> float:
-    return 0.0 
+def calculate_bootstrap_variance(
+    params_rf: dict,
+    df_train: pd.DataFrame,
+    seed: int,
+    B_1: int,
+    data_generation_parameter: dict,
+) -> float:
 
+    np_train = df_train.values
+    df_train_columns_name = df_train.columns
+    preds = np.empty(B_1)
+    
+    rng = np.random.default_rng(seed)
+    first_level_boot_indices = rng.choice(
+        a=np.arange(df_train.shape[0]), size=(B_1, df_train.shape[0]), replace=True
+    )
+    
+    for b in range(B_1):
+
+        np_train_boot = np_train[first_level_boot_indices[b], :]
+
+        # Create the new dataset with IPCW weights
+        df_train_boot = create_data_with_ipc_weights(
+            data=pd.DataFrame(np_train_boot, columns=df_train_columns_name), params=data_generation_parameter
+        )
+
+        # Set the random state and fit the classifier
+        clf = DecisionTreeBaggingClassifier(params_rf)
+        clf.set_random_state(random_state=seed + 1000+ b )
+        
+        clf.fit(
+            X=df_train_boot.drop(
+                ["time", "event", "weights_ipcw", "survived"], axis=1
+            ).values,
+            y=df_train_boot["survived"].values,
+            sample_weights=df_train_boot["weights_ipcw"].values,
+        )
+        
+        # Predict and store result
+        _ ,pred = clf.predict_proba(data_generation_parameter['X_pred_point'].values)
+        preds[b] = pred[0]
+
+    return np.var(preds, ddof=1)
 
 #########################################################################################################
 ' Data Generation functions '
@@ -483,7 +512,7 @@ def simulation(
 
     ### boot
     if boot_calc[0]:
-        boot_var = calculate_bootstrap_variance(B_1 = boot_calc[1])
+        boot_var = calculate_bootstrap_variance(params_rf=params_rf, df_train=df_train, seed=seed, B_1=boot_calc[1], data_generation_parameter=data_generation_parameter)
     else:
         boot_var = 0.0
 
@@ -552,7 +581,7 @@ def save_results(n,n_covariates, B_RF, boot_calc, seed, results1, results3, resu
 #########################################################################################################
 'Plot functions'
 
-def plot_pred_bias(exp_save_path):
+def plot_pred_bias(exp_save_path, y1=None,y2=None):
     with open(exp_save_path + '/setting.json') as f:
         exp_settings = json.load(f)
     S_t = exp_settings["true_survival_probability[1,3,5]"]
@@ -567,9 +596,9 @@ def plot_pred_bias(exp_save_path):
     pred_bias_5 = [ (results5['wb_pred'].mean()-S_t[2])/S_t[2] * 100  , (results5['rf_pred'].mean()-S_t[2])/S_t[2] * 100]
     pred_bias = [ pred_bias_1,   pred_bias_3,   pred_bias_5  ]
 
-    pred_error_1 = [np.std((results1['wb_pred']-S_t[0])/S_t[0],ddof=1) , np.std((results1['rf_pred']-S_t[0])/S_t[0],ddof=1)]
-    pred_error_3 = [np.std((results3['wb_pred']-S_t[1])/S_t[1],ddof=1) , np.std((results3['rf_pred']-S_t[1])/S_t[1],ddof=1)]
-    pred_error_5 = [np.std((results5['wb_pred']-S_t[2])/S_t[2],ddof=1) , np.std((results5['rf_pred']-S_t[2])/S_t[2],ddof=1)]
+    pred_error_1 = [np.std((results1['wb_pred']-S_t[0])/S_t[0]* 100,ddof=1) , np.std((results1['rf_pred']-S_t[0])/S_t[0]* 100,ddof=1)]
+    pred_error_3 = [np.std((results3['wb_pred']-S_t[1])/S_t[1]* 100,ddof=1) , np.std((results3['rf_pred']-S_t[1])/S_t[1]* 100,ddof=1)]
+    pred_error_5 = [np.std((results5['wb_pred']-S_t[2])/S_t[2]* 100,ddof=1) , np.std((results5['rf_pred']-S_t[2])/S_t[2]* 100,ddof=1)]
     bias_errors =  [ pred_error_1,  pred_error_3,  pred_error_5 ]
 
     # Plot Prediction Bias
@@ -603,10 +632,91 @@ def plot_pred_bias(exp_save_path):
             ha='left', va='center', transform=plt.gca().transAxes)
     plt.text(a,b-0.2, r"....... for each setting with $\frac{\mid \{w_i=0\} \mid}{\mid \{w_i\} \mid}$", 
             ha='left', va='center', transform=plt.gca().transAxes) 
+    if y1 is not None and y2 is not None:
+        plt.ylim(y1,y2)
+        plt.savefig(exp_save_path + f'/pred_S_bias(n_train){exp_settings["n_train"]}__(B_RF){exp_settings["B_RF"]}__(n_sim){exp_settings["n_sim"]}__covariates{exp_settings["n_covariates"]}__{y1+y2}.png', bbox_inches='tight')
+    else:
+        plt.savefig(exp_save_path + f'/pred_S_bias(n_train){exp_settings["n_train"]}__(B_RF){exp_settings["B_RF"]}__(n_sim){exp_settings["n_sim"]}__covariates{exp_settings["n_covariates"]}.png', bbox_inches='tight')
 
-    plt.savefig(exp_save_path + f'/pred_S_bias(n_train){exp_settings["n_train"]}__(B_RF){exp_settings["B_RF"]}__(n_sim){exp_settings["n_sim"]}__covariates{exp_settings["n_covariates"]}.png', bbox_inches='tight')
+def plot_var_bias_without_u2(exp_save_path, y1=None, y2=None):
 
-def plot_var_bias(exp_save_path):
+    with open(exp_save_path + '/setting.json') as f:
+        exp_settings = json.load(f)
+
+    # lade results
+    results1 = pd.read_csv(exp_save_path + f"/results1__(zero_weights){exp_settings['portion_zero_weights_train[1,3,5]'][0]}__(seen_events){exp_settings['portion_seen_events_train[1,3,5]'][0]}.csv")
+    results3 = pd.read_csv(exp_save_path + f"/results3__(zero_weights){exp_settings['portion_zero_weights_train[1,3,5]'][1]}__(seen_events){exp_settings['portion_seen_events_train[1,3,5]'][1]}.csv")
+    results5 = pd.read_csv(exp_save_path + f"/results5__(zero_weights){exp_settings['portion_zero_weights_train[1,3,5]'][2]}__(seen_events){exp_settings['portion_seen_events_train[1,3,5]'][2]}.csv")
+
+    # True Standard Deviations
+    true_std_1 = results1['rf_pred'].std(ddof=1)
+    true_std_3 = results3['rf_pred'].std(ddof=1)
+    true_std_5 = results5['rf_pred'].std(ddof=1)
+
+    # Bias and Error of the Standard Deviation Estimates (ohne u2 Schätzer)
+    exclude_keys = ['ijk_u2_butt_var', 'ijk_u2_jahn_var']
+    columns = [col for col in results1.columns[9:] if not any(key in col for key in exclude_keys)]
+
+    def calc_bias_and_error(results, true_std):
+        bias = [(np.mean(results[col].apply(lambda x: np.sqrt(x) if x >= 0 else 0)) - true_std) / true_std * 100 for col in columns]
+        error = [np.std((results[col].apply(lambda x: np.sqrt(x) if x >= 0 else 0) - true_std) / true_std * 100, ddof=1) for col in columns]
+        return bias, error
+
+    var_bias_1, var_error_1 = calc_bias_and_error(results1, true_std_1)
+    var_bias_3, var_error_3 = calc_bias_and_error(results3, true_std_3)
+    var_bias_5, var_error_5 = calc_bias_and_error(results5, true_std_5)
+
+    var_bias = [var_bias_1, var_bias_3, var_bias_5]
+    errors = [var_error_1, var_error_3, var_error_5]
+
+    names = [col[:-4] for col in columns]  # names of the methods
+    weights_zero = [round(_, 2) for _ in exp_settings['portion_zero_weights_train[1,3,5]']]
+
+    # Erzeuge ein Plot
+    plt.figure(figsize=(10, 5))
+    colors = [
+        'darkviolet', 'violet',   # Ähnliche Farben 1
+        'blue', 'skyblue',        # Ähnliche Farben 2
+        'green', 'lime',                 # Ähnliche Farben 3
+        'orange', 'tan',  
+        'black'
+    ]
+
+    # Plotten der Punkte mit Fehlerbalken und Legende
+    offset = np.linspace(-0.03, 0.03, len(names))  # Kleinere Versatzwerte für die x-Werte
+    for j, name in enumerate(names):
+        for i, weight in enumerate(weights_zero):
+            plt.errorbar(weight + offset[j], var_bias[i][j], yerr=errors[i][j], fmt='o', color=colors[j], label=name if i == 0 else "")
+
+    # Achsenbeschriftungen und Titel hinzufügen
+    plt.axhline(y=0, color='red', linestyle='--')
+    plt.title('Variance Prediction Bias')
+    plt.grid(True)
+    plt.xticks(weights_zero)
+    plt.xlabel(r'$\frac{\mid \{w_i=0\} \mid}{n_{train}}$')
+    plt.ylabel(r'rel. bias of $\hat{std}( \hat{S}(\tau\mid X_{pred}))$'+str(' (in %)'))
+    plt.title(r'Bias of estimated variance of DTBC models prediction $\hat{S}(\tau\mid X_{pred}=$'+str(exp_settings['X_pred_point'])+str(')'))
+    plt.legend(title='Model', loc='upper left', fancybox=True, shadow=True, ncol=2, bbox_to_anchor=(0.32, -0.2))
+
+    # Zusätzliche Informationen im Plot
+    a = 0.7
+    b = -0.15
+    plt.text(-0.12, -0.25, f"(dots are mean bias,\n  errorbars are based on 1.96 * empirical std.)\n\n Simulation study params: \n n_sim={exp_settings['n_sim']}, n_train = {exp_settings['n_train'] }, B ={exp_settings['B_RF']}, B_1={exp_settings['B_1'] }\n ", 
+             ha='left', va='center', transform=plt.gca().transAxes)
+    plt.text(a, b, r"True std   = "+f" {[ round(_, 2) for _ in [true_std_1, true_std_3, true_std_5]]}",
+             ha='left', va='center', transform=plt.gca().transAxes)
+    plt.text(a, b-0.1, f"Seen events (in %) = {[round(_,2) for _ in exp_settings['portion_seen_events_train[1,3,5]']]} ",
+             ha='left', va='center', transform=plt.gca().transAxes)
+    plt.text(a, b-0.2, r"....... for each setting with $\frac{\mid \{w_i=0\} \mid}{\mid \{w_i\} \mid}$", 
+             ha='left', va='center', transform=plt.gca().transAxes) 
+
+    if y1 is not None and y2 is not None:
+        plt.ylim(y1, y2)
+        plt.savefig(exp_save_path + f'/pred_var_bias(n_train){exp_settings["n_train"]}__(B_RF){exp_settings["B_RF"]}__(n_sim){exp_settings["n_sim"]}__covariates{exp_settings["n_covariates"]}__{y1+y2}.png', bbox_inches='tight')
+    else:
+        plt.savefig(exp_save_path + f'/pred_var_bias(n_train){exp_settings["n_train"]}__(B_RF){exp_settings["B_RF"]}__(n_sim){exp_settings["n_sim"]}__covariates{exp_settings["n_covariates"]}.png', bbox_inches='tight')
+
+def plot_var_bias(exp_save_path, y1=None,y2=None):
 
     with open(exp_save_path + '/setting.json') as f:
         exp_settings = json.load(f)
@@ -658,41 +768,41 @@ def plot_var_bias(exp_save_path):
                 (np.mean(results5['jk_u_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0))-   true_std_5)/true_std_5 * 100  ,
                 (np.mean(results5['boot_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0))-         true_std_5)/true_std_5 * 100  ,   ]
 
-    var_error_1 =[ np.std(  (results1['ijk_butt_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -true_std_1) /true_std_1 , ddof=1 )  ,
-                np.std(  (results1['ijk_u_butt_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  - true_std_1) /true_std_1 , ddof=1 )  ,
-                np.std(  (results1['ijk_u2_butt_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0) - true_std_1) /true_std_1 , ddof=1 )  ,
-                np.std(  (results1['ijk_jahn_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0) -    true_std_1) /true_std_1 , ddof=1 )  ,
-                np.std(  (results1['ijk_u_jahn_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  - true_std_1) /true_std_1 , ddof=1 )  ,
-                np.std(  (results1['ijk_u2_jahn_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)-  true_std_1) /true_std_1 , ddof=1 )  ,
-                np.std(  (results1['ijk_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -  true_std_1) /true_std_1 , ddof=1 )  ,
-                np.std(  (results1['ijk_u_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)-  true_std_1) /true_std_1 , ddof=1 )  ,
-                np.std(  (results1['jk_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -   true_std_1) /true_std_1 , ddof=1 )  ,
-                np.std(  (results1['jk_u_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  - true_std_1) /true_std_1 , ddof=1 )  ,
-                np.std(  (results1['boot_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -       true_std_1) /true_std_1 , ddof=1 )  ,  ]
+    var_error_1 =[ np.std(  (results1['ijk_butt_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -true_std_1) /true_std_1 * 100, ddof=1 )  ,
+                np.std(  (results1['ijk_u_butt_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  - true_std_1) /true_std_1 * 100, ddof=1 )  ,
+                np.std(  (results1['ijk_u2_butt_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0) - true_std_1) /true_std_1 * 100, ddof=1 )  ,
+                np.std(  (results1['ijk_jahn_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0) -    true_std_1) /true_std_1 * 100, ddof=1 )  ,
+                np.std(  (results1['ijk_u_jahn_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  - true_std_1) /true_std_1 * 100, ddof=1 )  ,
+                np.std(  (results1['ijk_u2_jahn_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)-  true_std_1) /true_std_1 * 100, ddof=1 )  ,
+                np.std(  (results1['ijk_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -  true_std_1) /true_std_1 * 100, ddof=1 )  ,
+                np.std(  (results1['ijk_u_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)-  true_std_1) /true_std_1 * 100, ddof=1 )  ,
+                np.std(  (results1['jk_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -   true_std_1) /true_std_1 * 100, ddof=1 )  ,
+                np.std(  (results1['jk_u_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  - true_std_1) /true_std_1 * 100, ddof=1 )  ,
+                np.std(  (results1['boot_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -       true_std_1) /true_std_1 * 100, ddof=1 )  ,  ]
 
-    var_error_3 =[ np.std(  (results3['ijk_butt_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -true_std_3) /true_std_3 , ddof=1 )  ,
-                np.std(  (results3['ijk_u_butt_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  - true_std_3) /true_std_3 , ddof=1 )  ,
-                np.std(  (results3['ijk_u2_butt_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0) - true_std_3) /true_std_3 , ddof=1 )  ,
-                np.std(  (results3['ijk_jahn_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0) -    true_std_3) /true_std_3 , ddof=1 )  ,
-                np.std(  (results3['ijk_u_jahn_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  - true_std_3) /true_std_3 , ddof=1 )  ,
-                np.std(  (results3['ijk_u2_jahn_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)-  true_std_3) /true_std_3 , ddof=1 )  ,
-                np.std(  (results3['ijk_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -  true_std_3) /true_std_3 , ddof=1 )  ,
-                np.std(  (results3['ijk_u_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -true_std_3) /true_std_3 , ddof=1 )  ,
-                np.std(  (results3['jk_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -   true_std_3) /true_std_3 , ddof=1 )  ,
-                np.std(  (results3['jk_u_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  - true_std_3) /true_std_3 , ddof=1 )  ,
-                np.std(  (results3['boot_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -       true_std_3) /true_std_3 , ddof=1 )  ,  ]
+    var_error_3 =[ np.std(  (results3['ijk_butt_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -true_std_3) /true_std_3 * 100, ddof=1 )  ,
+                np.std(  (results3['ijk_u_butt_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  - true_std_3) /true_std_3* 100 , ddof=1 )  ,
+                np.std(  (results3['ijk_u2_butt_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0) - true_std_3) /true_std_3 * 100, ddof=1 )  ,
+                np.std(  (results3['ijk_jahn_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0) -    true_std_3) /true_std_3* 100 , ddof=1 )  ,
+                np.std(  (results3['ijk_u_jahn_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  - true_std_3) /true_std_3 * 100, ddof=1 )  ,
+                np.std(  (results3['ijk_u2_jahn_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)-  true_std_3) /true_std_3 * 100, ddof=1 )  ,
+                np.std(  (results3['ijk_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -  true_std_3) /true_std_3 * 100, ddof=1 )  ,
+                np.std(  (results3['ijk_u_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -true_std_3) /true_std_3 * 100, ddof=1 )  ,
+                np.std(  (results3['jk_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -   true_std_3) /true_std_3* 100 , ddof=1 )  ,
+                np.std(  (results3['jk_u_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  - true_std_3) /true_std_3* 100, ddof=1 )  ,
+                np.std(  (results3['boot_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -       true_std_3) /true_std_3 * 100, ddof=1 )  ,  ]
 
-    var_error_5 =[ np.std(  (results5['ijk_butt_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -true_std_5) /true_std_5 , ddof=1 )  ,
-                np.std(  (results5['ijk_u_butt_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  - true_std_5) /true_std_5 , ddof=1 )  ,
-                np.std(  (results5['ijk_u2_butt_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0) - true_std_5) /true_std_5 , ddof=1 )  ,
-                np.std(  (results5['ijk_jahn_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0) -    true_std_5) /true_std_5 , ddof=1 )  ,
-                np.std(  (results5['ijk_u_jahn_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  - true_std_5) /true_std_5 , ddof=1 )  ,
-                np.std(  (results5['ijk_u2_jahn_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)-  true_std_5) /true_std_5 , ddof=1 )  ,
-                np.std(  (results5['ijk_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -  true_std_5) /true_std_5 , ddof=1 )  ,
-                np.std(  (results5['ijk_u_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -true_std_5) /true_std_5 , ddof=1 )  ,
-                np.std(  (results5['jk_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -   true_std_5) /true_std_5 , ddof=1 )  ,
-                np.std(  (results5['jk_u_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  - true_std_5) /true_std_5 , ddof=1 )  ,
-                np.std(  (results5['boot_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -       true_std_5) /true_std_5 , ddof=1 )  ,  ]
+    var_error_5 =[ np.std(  (results5['ijk_butt_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -true_std_5) /true_std_5* 100 , ddof=1 )  ,
+                np.std(  (results5['ijk_u_butt_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  - true_std_5) /true_std_5 * 100, ddof=1 )  ,
+                np.std(  (results5['ijk_u2_butt_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0) - true_std_5) /true_std_5 * 100, ddof=1 )  ,
+                np.std(  (results5['ijk_jahn_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0) -    true_std_5) /true_std_5 * 100, ddof=1 )  ,
+                np.std(  (results5['ijk_u_jahn_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  - true_std_5) /true_std_5 * 100, ddof=1 )  ,
+                np.std(  (results5['ijk_u2_jahn_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)-  true_std_5) /true_std_5 * 100, ddof=1 )  ,
+                np.std(  (results5['ijk_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -  true_std_5) /true_std_5 * 100, ddof=1 )  ,
+                np.std(  (results5['ijk_u_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -true_std_5) /true_std_5 * 100, ddof=1 )  ,
+                np.std(  (results5['jk_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -   true_std_5) /true_std_5 * 100, ddof=1 )  ,
+                np.std(  (results5['jk_u_wager_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  - true_std_5) /true_std_5 * 100, ddof=1 )  ,
+                np.std(  (results5['boot_var'].apply(lambda x: np.sqrt(x) if x >= 0 else 0)  -       true_std_5) /true_std_5 * 100, ddof=1 )  ,  ]
 
     var_bias =  [ var_bias_1,   var_bias_3,   var_bias_5  ]
     errors =    [ var_error_1, var_error_3, var_error_5 ]
@@ -726,6 +836,7 @@ def plot_var_bias(exp_save_path):
     plt.legend(title='Model', loc='upper left', fancybox=True, shadow=True, ncol=2, bbox_to_anchor=(0.32, -0.2))
     a = 0.7
     b= -0.15
+
     plt.text(-0.12, -0.25, f"(dots are mean bias,\n  errorbars are based on 1.96 * empirical std.)\n\n Simulation study params: \n n_sim={exp_settings['n_sim']}, n_train = {exp_settings['n_train'] }, B ={exp_settings['B_RF']}, B_1={exp_settings['B_1'] }\n ", 
             ha='left', va='center', transform=plt.gca().transAxes)
     plt.text(a,b, r"True std   = "+ f" {[ round(_, 2) for _ in [true_std_1, true_std_3, true_std_5]]}" ,
@@ -734,4 +845,8 @@ def plot_var_bias(exp_save_path):
             ha='left', va='center', transform=plt.gca().transAxes)
     plt.text(a,b-0.2, r"....... for each setting with $\frac{\mid \{w_i=0\} \mid}{\mid \{w_i\} \mid}$", 
             ha='left', va='center', transform=plt.gca().transAxes) 
-    plt.savefig(exp_save_path + f'/pred_var_bias(n_train){exp_settings["n_train"]}__(B_RF){exp_settings["B_RF"]}__(n_sim){exp_settings["n_sim"]}__covariates{exp_settings["n_covariates"]}.png', bbox_inches='tight')
+    if y1 is not None and y2 is not None:
+        plt.ylim(y1,y2)
+        plt.savefig(exp_save_path + f'/pred_var_bias(n_train){exp_settings["n_train"]}__(B_RF){exp_settings["B_RF"]}__(n_sim){exp_settings["n_sim"]}__covariates{exp_settings["n_covariates"]}__{y1+y2}.png', bbox_inches='tight')
+    else:
+        plt.savefig(exp_save_path + f'/pred_var_bias(n_train){exp_settings["n_train"]}__(B_RF){exp_settings["B_RF"]}__(n_sim){exp_settings["n_sim"]}__covariates{exp_settings["n_covariates"]}.png', bbox_inches='tight')
