@@ -25,13 +25,12 @@ def calculate_ijk_butt_variance(
 
     biased_var_estimate = np.sum(array[~np.isnan(array) & ~np.isinf(array)], axis=0) * np.sum(weights**2)
 
+    # bias correction 1
     bias_correction = n / B * np.sum(1-weights[weights > 0]) * np.var(T_N_b, axis=0, ddof=1)* np.sum(weights**2)
 
-    cov_i__ =  (((N_bi - n * weights.values.reshape(1,-1))**2).T @ (T_N_b - pred)**2) / B
-
-    aa = ((weights * (1-weights) * n * np.var(T_N_b, axis=0, ddof=1)).values.reshape(-1,1) + cov_i__ - cov_i_hoch2 ) / weights.values.reshape(-1,1)
-
-    bias_correction2 = np.sum(weights**2) * 1/B  * np.sum(aa[~np.isnan(aa) & ~np.isinf(aa)], axis=0) 
+    # bias correction 2
+    bb = np.var((N_bi - n * weights.values.reshape(1,-1)) * (T_N_b - pred), axis=0, ddof=1)  / weights.values.reshape(1,-1)
+    bias_correction2 = np.sum(weights**2) * 1/B  * np.sum(bb[~np.isnan(bb) & ~np.isinf(bb)], axis=0)
 
     return biased_var_estimate , bias_correction[0], bias_correction2
 
@@ -51,14 +50,13 @@ def calculate_ijk_jahn_variance(
 
     biased_var_estimate = np.sum(array[~np.isnan(array) & ~np.isinf(array)], axis=0) * (1/(np.sum(weights > 0))**2)
 
+    #bias_correction1
     bias_correction =  (1/n_plus**2)  * np.var(T_N_b, axis=0, ddof=1)* n / B * np.sum( ( 1 / (weights[weights > 0] ) ) -1) 
+    
+    # bias correction 2
+    bb = np.var((N_bi - n * weights.values.reshape(1,-1)) * (T_N_b - pred), axis=0, ddof=1)  / (weights**2).values.reshape(1,-1)
+    bias_correction2 = (1/n_plus**2) * 1/B  * np.sum(bb[~np.isnan(bb) & ~np.isinf(bb)], axis=0)
 
-    cov_i__ =  (((N_bi - n * weights.values.reshape(1,-1))**2).T @ (T_N_b - pred)**2) / B
-
-    aa = ((weights * (1-weights) * n * np.var(T_N_b, axis=0, ddof=1)).values.reshape(-1,1) + cov_i__ - cov_i_hoch2 ) / (weights**2).values.reshape(-1,1)
-
-    bias_correction2 = (1/n_plus**2)  * 1/B  * np.sum(aa[~np.isnan(aa) & ~np.isinf(aa)], axis=0)   
-  
     return biased_var_estimate , bias_correction[0], bias_correction2
 
 def calculate_ijk_wager_variance(
