@@ -170,41 +170,36 @@ def save_results_png(
     bagged_preds: np.ndarray,
     est_vars_biased: np.ndarray,
     bias_correction: np.ndarray,
-    y_lim: Tuple[float, float] = [0, 0.3],
+    y_lim: Tuple[float, float] = [0,0.35],
     folder_name: str = "test_folder",
-    n_data_points: np.ndarray = None,
-    B: int = None,
-    seed: int = None,
-    dt_args: Dict = None,
-    fixed_x_points: bool = True,
+    std_estimator_name: str = "IJK-WAB-U",
+
     show_only_plot: bool = False,
     show_only_unbiased: bool = True,
-    m: bool = False,
-    reduced: bool = False,
+
 ):
-    n_simulations = bagged_preds.shape[0]
+    true_std = bagged_preds.std(axis=0, ddof=1)
 
-    true_std = bagged_preds.std(axis=0)
-
-    unbiased_std_estimate = (est_vars_biased - bias_correction) ** 0.5
+    unbiased_std_estimate = np.where((est_vars_biased - bias_correction)<0, 0, (est_vars_biased - bias_correction))**0.5
     unbiased_std_estimate_mean = unbiased_std_estimate.mean(axis=0)
 
-    biased_std_mean = (est_vars_biased**0.5).mean(axis=0)
+    biased_std_mean = (np.where(est_vars_biased <0, 0, est_vars_biased)**0.5).mean(axis=0)
 
     lower_bound = unbiased_std_estimate_mean - unbiased_std_estimate.std(axis=0)
     upper_bound = unbiased_std_estimate_mean + unbiased_std_estimate.std(axis=0)
-
+    plt.rcParams["text.usetex"] = True
     # Plotting the results
     plt.figure(figsize=(10, 6))
     plt.plot(new_data, true_std, label="Emp. std")
     plt.plot(
         new_data,
-        unbiased_std_estimate_mean,
-        label="Mean est. std IJK-WAB-U",
+        unbiased_std_estimate.mean(axis=0),
+        label=f"{std_estimator_name}",
         alpha=0.6,
     )
     if not show_only_unbiased:
-        plt.plot(new_data, biased_std_mean, label="Mean Est. std IJK-biased", alpha=0.4)
+        plt.plot(new_data, biased_std_mean, label=f"Mean estimated std - {std_estimator_name}", alpha=0.4)
+
     plt.fill_between(
         new_data,
         lower_bound,
@@ -222,9 +217,6 @@ def save_results_png(
 
     plt.legend()
 
-  
-            
-
     if show_only_plot:
         plt.show()
 
@@ -234,6 +226,6 @@ def save_results_png(
 
         
         plt.savefig(
-            f"{directory_path}/seed{seed}_nB{B}_fixed_x_{dt_args.items()}.png",
-            dpi=600,
+            f"{directory_path}/plot.png",
+            dpi=300, bbox_inches='tight'
         )
