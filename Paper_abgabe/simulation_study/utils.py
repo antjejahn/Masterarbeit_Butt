@@ -677,12 +677,10 @@ def plot_var_bias_without_u2(exp_save_path, y1=None, y2=None,patient=''):
     # Erzeuge ein Plot
     plt.figure(figsize=(10, 5))
     colors = [
-        'darkviolet', 'violet',   # Ähnliche Farben 1
-        'blue', 'skyblue',        # Ähnliche Farben 2
-        'green', 'lime',                 # Ähnliche Farben 3
-        'orange', 'tan',  
-        'black'
-    ]
+        (0.0, 0.25, 0.74),  # Blau
+        (0.85, 0.33, 0.1),  # Orange
+        (0.47, 0.67, 0.19)  # Grün
+        ]
 
     # Plotten der Punkte mit Fehlerbalken und Legende
     offset = np.linspace(-0.03, 0.03, len(names))  # Kleinere Versatzwerte für die x-Werte
@@ -699,4 +697,5 @@ def plot_var_bias_without_u2(exp_save_path, y1=None, y2=None,patient=''):
     plt.legend(title='Estimator', loc='upper left')
     plt.ylim(y1, y2)
 
-    plt.savefig(exp_save_path + f'/pred_var_bias(n_train){exp_settings["n_train"]}__(B_RF){exp_settings["B_RF"]}__(n_sim){exp_settings["n_sim"]}__covariates{exp_settings["n_covariates"]}_{patient}.png', bbox_inches='tight',dpi = 300)
+    plt.savefig(exp_save_path + f'/pred_var_bias(n_train){exp_settings["n_train"]}__(B_RF){exp_settings["B_RF"]}__(n_sim){exp_settings["n_sim"]}__covariates{exp_settings["n_covariates"]}_{patient}.jpeg', bbox_inches='tight',
+                dpi = 300)

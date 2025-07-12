@@ -241,6 +241,6 @@ def save_results_png(
 
         
         plt.savefig(
-            f"{directory_path}/plot__{plot_name}.png",
+            f"{directory_path}/plot__{plot_name}.jpeg",
             dpi=300, bbox_inches='tight'
         )
