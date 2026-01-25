@@ -54,10 +54,9 @@ def calculate_ijk_jahn_variance(
     bias_correction =  (1/n_plus**2)  * np.var(T_N_b, axis=0, ddof=1)* n / B * np.sum( ( 1 / (weights[weights > 0] ) ) -1) 
     
     # bias correction 2
-    bb = np.var((N_bi - n * weights.values.reshape(1,-1)) * (T_N_b - pred), axis=0, ddof=1)  / (weights**2).values.reshape(1,-1)
-    bias_correction2 = (1/n_plus**2) * 1/B  * np.sum(bb[~np.isnan(bb) & ~np.isinf(bb)], axis=0)
+    bias_correction2 = (1/n_plus**2)  * np.var(T_N_b, axis=0, ddof=1)* n / B * np.sum( ( 1 / (weights[weights > 0] ) )) 
 
-    return biased_var_estimate , bias_correction[0], bias_correction2
+    return biased_var_estimate , bias_correction[0], 0
 
 def calculate_ijk_wager_variance(
     clf: DecisionTreeBaggingClassifier, X_pred_point: pd.DataFrame, df_train: pd.DataFrame
@@ -697,5 +696,5 @@ def plot_var_bias_without_u2(exp_save_path, y1=None, y2=None,patient=''):
     plt.legend(title='Estimator', loc='upper left')
     plt.ylim(y1, y2)
 
-    plt.savefig(exp_save_path + f'/pred_var_bias(n_train){exp_settings["n_train"]}__(B_RF){exp_settings["B_RF"]}__(n_sim){exp_settings["n_sim"]}__covariates{exp_settings["n_covariates"]}_{patient}.jpeg', bbox_inches='tight',
-                dpi = 300)
+    #plt.savefig(exp_save_path + f'\\pred_var_bias(n_train){exp_settings["n_train"]}__(B_RF){exp_settings["B_RF"]}__(n_sim){exp_settings["n_sim"]}__covariates{exp_settings["n_covariates"]}_{patient}.jpeg', bbox_inches='tight',
+    #            dpi = 300)
