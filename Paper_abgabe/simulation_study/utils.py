@@ -56,7 +56,7 @@ def calculate_ijk_jahn_variance(
     # bias correction 2
     bias_correction2 = (1/n_plus**2)  * np.var(T_N_b, axis=0, ddof=1)* n / B * np.sum( ( 1 / (weights[weights > 0] ) )) 
 
-    return biased_var_estimate , bias_correction[0], 0
+    return biased_var_estimate , bias_correction[0], bias_correction2[0]
 
 def calculate_ijk_wager_variance(
     clf: DecisionTreeBaggingClassifier, X_pred_point: pd.DataFrame, df_train: pd.DataFrame
