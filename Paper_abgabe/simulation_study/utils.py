@@ -1032,7 +1032,7 @@ def create_plots_from_notebooks(
     corr_xlims=None,
     strip_xlim=None,
     rb_xlim=None,
-    var_xlim=None,
+    var_xlims=None,
 ):
     """Execute plot notebooks in-process and pass optional x-axis limits via environment."""
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1059,8 +1059,12 @@ def create_plots_from_notebooks(
     if rb_xlim is not None:
         os.environ["RB_XLIM"] = f"{float(rb_xlim[0])},{float(rb_xlim[1])}"
 
-    if var_xlim is not None:
-        os.environ["VAR_XLIM"] = f"{float(var_xlim[0])},{float(var_xlim[1])}"
+    if var_xlims is not None:
+        if len(var_xlims) != 3:
+            raise ValueError("var_xlims must contain exactly 3 (min,max) tuples for pw=1,3,5")
+        os.environ["VAR_XLIM_1"] = f"{float(var_xlims[0][0])},{float(var_xlims[0][1])}"
+        os.environ["VAR_XLIM_3"] = f"{float(var_xlims[1][0])},{float(var_xlims[1][1])}"
+        os.environ["VAR_XLIM_5"] = f"{float(var_xlims[2][0])},{float(var_xlims[2][1])}"
 
     existing_pythonpath = os.environ.get("PYTHONPATH", "")
     if existing_pythonpath:

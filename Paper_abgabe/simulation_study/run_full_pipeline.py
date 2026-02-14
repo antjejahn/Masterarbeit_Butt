@@ -71,7 +71,9 @@ def main():
     parser.add_argument("--corr-xlim-3", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
     parser.add_argument("--corr-xlim-5", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
     parser.add_argument("--strip-xlim", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
-    parser.add_argument("--var-xlim", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
+    parser.add_argument("--var-xlim-1", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
+    parser.add_argument("--var-xlim-3", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
+    parser.add_argument("--var-xlim-5", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
     parser.add_argument("--rb-xlim", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
     args = parser.parse_args()
 
@@ -81,6 +83,12 @@ def main():
             raise ValueError("If you set corr x-limits, provide all three: --corr-xlim-1/3/5")
         corr_xlims = [tuple(args.corr_xlim_1), tuple(args.corr_xlim_3), tuple(args.corr_xlim_5)]
 
+    var_xlims = None
+    if args.var_xlim_1 or args.var_xlim_3 or args.var_xlim_5:
+        if not (args.var_xlim_1 and args.var_xlim_3 and args.var_xlim_5):
+            raise ValueError("If you set variance x-limits, provide all three: --var-xlim-1/3/5")
+        var_xlims = [tuple(args.var_xlim_1), tuple(args.var_xlim_3), tuple(args.var_xlim_5)]
+
     if args.mode == "plots-only":
         if args.results_path is None:
             raise ValueError("For --mode plots-only you must provide --results-path")
@@ -89,7 +97,7 @@ def main():
             patient=args.patient_label,
             corr_xlims=corr_xlims,
             strip_xlim=tuple(args.strip_xlim) if args.strip_xlim else None,
-            var_xlim=tuple(args.var_xlim) if args.var_xlim else None,
+            var_xlims=var_xlims,
             rb_xlim=tuple(args.rb_xlim) if args.rb_xlim else None,
         )
         print(f"Notebook plots generated for existing folder: {os.path.abspath(args.results_path)}")
@@ -126,7 +134,7 @@ def main():
         patient=args.patient_label,
         corr_xlims=corr_xlims,
         strip_xlim=tuple(args.strip_xlim) if args.strip_xlim else None,
-        var_xlim=tuple(args.var_xlim) if args.var_xlim else None,
+        var_xlims=var_xlims,
         rb_xlim=tuple(args.rb_xlim) if args.rb_xlim else None,
     )
     print(f"Simulation and plots completed. Output folder: {os.path.abspath(save_path)}")
