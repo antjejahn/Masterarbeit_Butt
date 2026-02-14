@@ -36,7 +36,25 @@ def build_data_params(n: int, tau: float, x_pred: pd.DataFrame):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run simulation + generate all plots automatically.")
+    parser = argparse.ArgumentParser(
+        description="Run simulation + generate all plots automatically.",
+        epilog=(
+            "PowerShell examples:\n"
+            "  One-line:\n"
+            "    python run_full_pipeline.py --mode plots-only --results-path \"results_in_pdf/...\" --corr-xlim-1 0.00 0.25 --corr-xlim-3 0.00 0.35 --corr-xlim-5 0.00 0.45 --strip-xlim 0.10 1.00 --rb-xlim -60 100\n"
+            "\n"
+            "  Multi-line in PowerShell uses backtick (`), not backslash (\\):\n"
+            "    python run_full_pipeline.py `\n"
+            "      --mode plots-only `\n"
+            "      --results-path \"results_in_pdf/...\" `\n"
+            "      --corr-xlim-1 0.00 0.25 `\n"
+            "      --corr-xlim-3 0.00 0.35 `\n"
+            "      --corr-xlim-5 0.00 0.45 `\n"
+            "      --strip-xlim 0.10 1.00 `\n"
+            "      --rb-xlim -60 100"
+        ),
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
     parser.add_argument("--mode", choices=["simulate", "plots-only"], default="simulate")
     parser.add_argument("--results-path", type=str, default=None, help="Existing result folder for plots-only mode")
     parser.add_argument("--n-sim", type=int, default=1000)
