@@ -51,7 +51,10 @@ def main():
             "      --corr-xlim-3 0.00 0.35 `\n"
             "      --corr-xlim-5 0.00 0.45 `\n"
             "      --strip-xlim 0.10 1.00 `\n"
-            "      --rb-xlim -60 100"
+            "      --rb-xlim -60 100\n"
+            "\n"
+            "  Alternative (Windows helper script from repo root):\n"
+            "    ./run_plots_only.ps1 -ResultsPath \"results_in_pdf/...\""
         ),
         formatter_class=argparse.RawTextHelpFormatter,
     )
