@@ -1032,6 +1032,7 @@ def create_plots_from_notebooks(
     corr_xlims=None,
     strip_xlim=None,
     rb_xlim=None,
+    var_xlim=None,
 ):
     """Execute plot notebooks in-process and pass optional x-axis limits via environment."""
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1057,6 +1058,9 @@ def create_plots_from_notebooks(
 
     if rb_xlim is not None:
         os.environ["RB_XLIM"] = f"{float(rb_xlim[0])},{float(rb_xlim[1])}"
+
+    if var_xlim is not None:
+        os.environ["VAR_XLIM"] = f"{float(var_xlim[0])},{float(var_xlim[1])}"
 
     existing_pythonpath = os.environ.get("PYTHONPATH", "")
     if existing_pythonpath:

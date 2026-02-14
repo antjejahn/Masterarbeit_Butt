@@ -71,6 +71,7 @@ def main():
     parser.add_argument("--corr-xlim-3", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
     parser.add_argument("--corr-xlim-5", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
     parser.add_argument("--strip-xlim", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
+    parser.add_argument("--var-xlim", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
     parser.add_argument("--rb-xlim", nargs=2, type=float, metavar=("MIN", "MAX"), default=None)
     args = parser.parse_args()
 
@@ -88,6 +89,7 @@ def main():
             patient=args.patient_label,
             corr_xlims=corr_xlims,
             strip_xlim=tuple(args.strip_xlim) if args.strip_xlim else None,
+            var_xlim=tuple(args.var_xlim) if args.var_xlim else None,
             rb_xlim=tuple(args.rb_xlim) if args.rb_xlim else None,
         )
         print(f"Notebook plots generated for existing folder: {os.path.abspath(args.results_path)}")
@@ -124,6 +126,7 @@ def main():
         patient=args.patient_label,
         corr_xlims=corr_xlims,
         strip_xlim=tuple(args.strip_xlim) if args.strip_xlim else None,
+        var_xlim=tuple(args.var_xlim) if args.var_xlim else None,
         rb_xlim=tuple(args.rb_xlim) if args.rb_xlim else None,
     )
     print(f"Simulation and plots completed. Output folder: {os.path.abspath(save_path)}")

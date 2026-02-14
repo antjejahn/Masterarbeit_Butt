@@ -14,6 +14,9 @@ param(
     [double]$StripXMin = 0.10,
     [double]$StripXMax = 1.00,
 
+    [double]$VarXMin = 0.0,
+    [double]$VarXMax = 0.4,
+
     [double]$RbXMin = -60,
     [double]$RbXMax = 100
 )
@@ -29,6 +32,7 @@ $ArgsList = @(
     "--corr-xlim-3", $CorrXMin3, $CorrXMax3,
     "--corr-xlim-5", $CorrXMin5, $CorrXMax5,
     "--strip-xlim", $StripXMin, $StripXMax,
+    "--var-xlim", $VarXMin, $VarXMax,
     "--rb-xlim", $RbXMin, $RbXMax
 )
 
