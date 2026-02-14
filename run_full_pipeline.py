@@ -7,6 +7,7 @@ from the repository root on Windows/Linux/macOS.
 
 from pathlib import Path
 import os
+import sys
 import runpy
 
 
@@ -19,7 +20,12 @@ def main() -> None:
         raise FileNotFoundError(f"Expected script not found: {target_script}")
 
     # Keep behavior identical to running inside Paper_abgabe/simulation_study
+    # and ensure local imports (e.g. `from utils import ...`) resolve on all platforms.
     os.chdir(sim_dir)
+    sim_dir_str = str(sim_dir)
+    if sim_dir_str not in sys.path:
+        sys.path.insert(0, sim_dir_str)
+
     runpy.run_path(str(target_script), run_name="__main__")
 
 
