@@ -1035,7 +1035,7 @@ def create_all_plots(exp_save_path: str):
 
     # 2) Variance RB plot (only required estimators)
     methods = ["ijk_u_jahn_var", "ijk_u_wager_var", "boot_var"]
-    labels = [r'$\\hat{V}_{IJ-U}^{wB}$', r'$\\hat{V}_{IJ-U}^{B}$', r'$\\hat{V}_{Boot}$']
+    labels = [r'$\hat{V}_{IJ-U}^{wB}$', r'$\hat{V}_{IJ-U}^{B}$', r'$\hat{V}_{Boot}$']
     weights_zero = [round(_, 2) for _ in exp_settings['portion_zero_weights_train[1,3,5]']]
 
     plt.figure(figsize=(10, 5))
