@@ -1032,11 +1032,25 @@ def create_plots_from_notebooks(exp_save_path: str, patient: str = "averageS"):
     notebooks = [
         "corr_plots.ipynb",
         "RB_est_var.ipynb",
+        "stripplot_and_CP.ipynb",
     ]
 
     target_path = os.path.abspath(exp_save_path)
     os.environ["EXP_SAVE_PATH"] = target_path
     os.environ["PATIENT_LABEL"] = patient
+
+    existing_pythonpath = os.environ.get("PYTHONPATH", "")
+    if existing_pythonpath:
+        os.environ["PYTHONPATH"] = base_dir + os.pathsep + existing_pythonpath
+    else:
+        os.environ["PYTHONPATH"] = base_dir
+
+    if os.name == "nt":
+        try:
+            import asyncio
+            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+        except Exception:
+            pass
 
     try:
         import nbformat
@@ -1053,7 +1067,7 @@ def create_plots_from_notebooks(exp_save_path: str, patient: str = "averageS"):
             notebook = nbformat.read(f, as_version=4)
 
         client = NotebookClient(notebook, timeout=1200, kernel_name="python3")
-        client.execute(cwd=base_dir)
+        client.execute(cwd=target_path)
 
         with open(nb_path, "w", encoding="utf-8") as f:
             nbformat.write(notebook, f)
