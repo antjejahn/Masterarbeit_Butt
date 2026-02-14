@@ -698,3 +698,361 @@ def plot_var_bias_without_u2(exp_save_path, y1=None, y2=None,patient=''):
 
     #plt.savefig(exp_save_path + f'\\pred_var_bias(n_train){exp_settings["n_train"]}__(B_RF){exp_settings["B_RF"]}__(n_sim){exp_settings["n_sim"]}__covariates{exp_settings["n_covariates"]}_{patient}.jpeg', bbox_inches='tight',
     #            dpi = 300)
+
+
+#########################################################################################################
+# Optimized end-to-end pipeline (Boot + IJK-Jahn + IJK-Wager only)
+REQUIRED_VARIANCE_COLUMNS = [
+    "ijk_jahn_var",
+    "ijk_u_jahn_var",
+    "ijk_wager_var",
+    "ijk_u_wager_var",
+    "boot_var",
+]
+
+
+def calculate_ijk_jahn_variance_from_arrays(
+    T_N_b: np.ndarray, pred: np.ndarray, N_bi: np.ndarray, weights: np.ndarray
+):
+    """Fast IJK-Jahn variance from precomputed tree predictions."""
+    B, n = N_bi.shape
+    n_plus = np.sum(weights > 0)
+
+    cov_i = ((N_bi - n * weights.reshape(1, -1)).T @ (T_N_b - pred)) / B
+    cov_i_hoch2 = cov_i**2
+    array = cov_i_hoch2 / ((weights.reshape(-1, 1)) ** 2)
+
+    biased_var_estimate = np.sum(array[~np.isnan(array) & ~np.isinf(array)], axis=0) * (1 / n_plus**2)
+    bias_correction = (1 / n_plus**2) * np.var(T_N_b, axis=0, ddof=1) * n / B * np.sum((1 / (weights[weights > 0])) - 1)
+    bias_correction2 = (1 / n_plus**2) * np.var(T_N_b, axis=0, ddof=1) * n / B * np.sum((1 / (weights[weights > 0])))
+
+    return biased_var_estimate, bias_correction[0], bias_correction2[0]
+
+
+def calculate_ijk_wager_variance_from_arrays(
+    T_N_b: np.ndarray, pred: np.ndarray, N_bi: np.ndarray
+):
+    """Fast IJK-Wager variance from precomputed tree predictions."""
+    B, n = N_bi.shape
+
+    cov_i = ((N_bi - 1).T @ (T_N_b - pred)) / B
+    cov_i_hoch2 = cov_i**2
+
+    biased_var_estimate = np.sum(cov_i_hoch2)
+    bias_correction = n / B * np.var(T_N_b, axis=0, ddof=1)
+
+    return biased_var_estimate, bias_correction[0]
+
+
+def simulation_core(
+    seed: int,
+    data_generation_parameter: dict,
+    params_rf: dict,
+    train_models: bool,
+    boot_B1: int,
+):
+    """Single simulation run with only required variance estimators."""
+    data = create_weibull_data(params=data_generation_parameter, random_state=seed)
+    df_train, df_test = stratified_split(data=data, random_state=seed, test_size=0.3)
+    df_train = create_data_with_ipc_weights(data=df_train, params=data_generation_parameter)
+    df_test = create_data_with_ipc_weights(data=df_test, params=data_generation_parameter)
+
+    if not train_models:
+        return {
+            "wb_test_mse": 0.0,
+            "rf_test_mse": 0.0,
+            "wb_pred": 0.0,
+            "rf_pred": 0.0,
+            "ijk_jahn_var": 0.0,
+            "ijk_u_jahn_var": 0.0,
+            "ijk_wager_var": 0.0,
+            "ijk_u_wager_var": 0.0,
+            "boot_var": 0.0,
+            "portion_zero_weights_train": 0.0,
+            "portion_seen_events_train": 0.0,
+            "portion_zero_weights_test": 0.0,
+            "portion_seen_events_test": 0.0,
+        }
+
+    aft = WeibullAFTFitter()
+    aft.fit(
+        df=df_train.drop(["weights_ipcw", "survived"], axis=1),
+        duration_col="time",
+        event_col="event",
+    )
+
+    y_pred = (
+        aft.predict_survival_function(
+            df=df_test.drop(["weights_ipcw", "survived", "time", "event"], axis=1),
+            times=data_generation_parameter["tau"],
+        )
+        .iloc[0]
+        .tolist()
+    )
+    wb_test_mse = ipc_weighted_mse(
+        y_true=df_test["survived"].values,
+        y_pred=y_pred,
+        sample_weight=df_test["weights_ipcw"],
+    )
+    wb_pred = (
+        aft.predict_survival_function(
+            df=data_generation_parameter["X_pred_point"],
+            times=data_generation_parameter["tau"],
+        )
+        .iloc[0]
+        .tolist()[0]
+    )
+
+    params_rf_local = dict(params_rf)
+    params_rf_local["random_state"] = seed
+    clf = DecisionTreeBaggingClassifier(params_rf_local)
+    clf.fit(
+        X=df_train.drop(["time", "event", "weights_ipcw", "survived"], axis=1).values,
+        y=df_train["survived"].values,
+        sample_weights=df_train["weights_ipcw"].values,
+    )
+
+    _, pred_test = clf.predict_proba(
+        df_test.drop(["weights_ipcw", "survived", "time", "event"], axis=1).values
+    )
+    rf_test_mse = ipc_weighted_mse(
+        y_true=df_test["survived"].values,
+        y_pred=pred_test,
+        sample_weight=df_test["weights_ipcw"].values,
+    )
+
+    T_N_b, pred_point = clf.predict_proba(data_generation_parameter["X_pred_point"].values)
+    rf_pred = pred_point[0]
+    N_bi = clf.nbi
+    weights = df_train["weights_ipcw"].values
+
+    ijk_jahn_var, jahn_u1, _ = calculate_ijk_jahn_variance_from_arrays(
+        T_N_b=T_N_b,
+        pred=pred_point,
+        N_bi=N_bi,
+        weights=weights,
+    )
+    ijk_wager_var, wager_u = calculate_ijk_wager_variance_from_arrays(
+        T_N_b=T_N_b,
+        pred=pred_point,
+        N_bi=N_bi,
+    )
+
+    boot_var = calculate_bootstrap_variance(
+        params_rf=params_rf_local,
+        df_train=df_train,
+        seed=seed,
+        B_1=boot_B1,
+        data_generation_parameter=data_generation_parameter,
+    )
+
+    return {
+        "wb_test_mse": wb_test_mse,
+        "rf_test_mse": rf_test_mse,
+        "wb_pred": wb_pred,
+        "rf_pred": rf_pred,
+        "ijk_jahn_var": ijk_jahn_var,
+        "ijk_u_jahn_var": ijk_jahn_var - jahn_u1,
+        "ijk_wager_var": ijk_wager_var,
+        "ijk_u_wager_var": ijk_wager_var - wager_u,
+        "boot_var": boot_var,
+        "portion_zero_weights_train": df_train["weights_ipcw"].eq(0).mean(),
+        "portion_seen_events_train": (df_train["survived"] == 0).mean(),
+        "portion_zero_weights_test": df_test["weights_ipcw"].eq(0).mean(),
+        "portion_seen_events_test": (df_test["survived"] == 0).mean(),
+    }
+
+
+def run_simulation_and_save(
+    n_sim: int,
+    seed: int,
+    n_covariates: int,
+    n: int,
+    B_RF: int,
+    B_1: int,
+    data_generation_parameter_1: dict,
+    data_generation_parameter_3: dict,
+    data_generation_parameter_5: dict,
+    params_rf: dict,
+):
+    """Run all three zero-weight scenarios and save results in one folder."""
+    results = {}
+    scenario_map = {
+        "1": data_generation_parameter_1,
+        "3": data_generation_parameter_3,
+        "5": data_generation_parameter_5,
+    }
+
+    for key, data_params in scenario_map.items():
+        run_rows = []
+        for i in range(n_sim):
+            run_rows.append(
+                simulation_core(
+                    seed=seed + i,
+                    data_generation_parameter=data_params,
+                    params_rf=params_rf,
+                    train_models=True,
+                    boot_B1=B_1,
+                )
+            )
+        results[key] = pd.DataFrame(run_rows)
+
+    exp_name = f"(n_train){int(n*0.7)}__(B_RF){B_RF}__(B_1){B_1}__(n_sim){n_sim}__(seed){seed}__{n_covariates}kovariates"
+    base_dir = os.path.join(os.path.abspath(""), "results", exp_name)
+    os.makedirs(base_dir, exist_ok=True)
+
+    suffix = (
+        results["1"]["portion_zero_weights_train"].mean()
+        + results["3"]["portion_zero_weights_train"].mean()
+        + results["5"]["portion_zero_weights_train"].mean()
+        + np.sum(data_generation_parameter_1["X_pred_point"].values[0])
+    )
+    save_path = os.path.join(base_dir, str(suffix))
+    os.makedirs(save_path, exist_ok=True)
+
+    for key in ["1", "3", "5"]:
+        df = results[key]
+        df.to_csv(
+            os.path.join(
+                save_path,
+                f"results{key}__(zero_weights){df['portion_zero_weights_train'].mean().round(4)}__(seen_events){df['portion_seen_events_train'].mean().round(4)}.csv",
+            ),
+            index=False,
+        )
+
+    with open(os.path.join(save_path, "setting.json"), "w") as file:
+        json.dump(
+            {
+                "n_covariates": n_covariates,
+                "n_sim": n_sim,
+                "n_train": int(n * 0.7),
+                "n": n,
+                "B_RF": B_RF,
+                "B_1": B_1,
+                "seed": seed,
+                "X_pred_point": str(data_generation_parameter_1["X_pred_point"].values[0]),
+                "shape_weibull": data_generation_parameter_1["shape_weibull"],
+                "data_generation_parameter_0_1": str(data_generation_parameter_1),
+                "data_generation_parameter_0_3": str(data_generation_parameter_3),
+                "data_generation_parameter_0_5": str(data_generation_parameter_5),
+                "params_rf": str(params_rf),
+                "portion_zero_weights_train[1,3,5]": [
+                    results["1"]["portion_zero_weights_train"].mean().round(4),
+                    results["3"]["portion_zero_weights_train"].mean().round(4),
+                    results["5"]["portion_zero_weights_train"].mean().round(4),
+                ],
+                "portion_seen_events_train[1,3,5]": [
+                    results["1"]["portion_seen_events_train"].mean().round(4),
+                    results["3"]["portion_seen_events_train"].mean().round(4),
+                    results["5"]["portion_seen_events_train"].mean().round(4),
+                ],
+                "true_survival_probability[1,3,5]": [
+                    calculate_true_survival_probability(data_generation_parameter_1),
+                    calculate_true_survival_probability(data_generation_parameter_3),
+                    calculate_true_survival_probability(data_generation_parameter_5),
+                ],
+                "wb_test_mse_ipcw[1,3,5]": [
+                    results["1"]["wb_test_mse"].mean(),
+                    results["3"]["wb_test_mse"].mean(),
+                    results["5"]["wb_test_mse"].mean(),
+                ],
+                "rf_test_mse_ipcw[1,3,5]": [
+                    results["1"]["rf_test_mse"].mean(),
+                    results["3"]["rf_test_mse"].mean(),
+                    results["5"]["rf_test_mse"].mean(),
+                ],
+            },
+            file,
+        )
+
+    return save_path
+
+
+def _load_results_by_setting(exp_save_path: str):
+    with open(exp_save_path + '/setting.json') as f:
+        exp_settings = json.load(f)
+
+    results1 = pd.read_csv(exp_save_path + f"/results1__(zero_weights){exp_settings['portion_zero_weights_train[1,3,5]'][0]}__(seen_events){exp_settings['portion_seen_events_train[1,3,5]'][0]}.csv")
+    results3 = pd.read_csv(exp_save_path + f"/results3__(zero_weights){exp_settings['portion_zero_weights_train[1,3,5]'][1]}__(seen_events){exp_settings['portion_seen_events_train[1,3,5]'][1]}.csv")
+    results5 = pd.read_csv(exp_save_path + f"/results5__(zero_weights){exp_settings['portion_zero_weights_train[1,3,5]'][2]}__(seen_events){exp_settings['portion_seen_events_train[1,3,5]'][2]}.csv")
+    return exp_settings, results1, results3, results5
+
+
+def create_all_plots(exp_save_path: str):
+    """Generate all core + additional plots for one experiment folder."""
+    exp_settings, results1, results3, results5 = _load_results_by_setting(exp_save_path)
+    S_t = exp_settings["true_survival_probability[1,3,5]"]
+    results_map = {"0.1": results1, "0.3": results3, "0.5": results5}
+
+    # 1) Prediction bias plot
+    plot_pred_bias(exp_save_path)
+
+    # 2) Variance RB plot (only required estimators)
+    methods = ["ijk_u_jahn_var", "ijk_u_wager_var", "boot_var"]
+    labels = [r'$\\hat{V}_{IJ-U}^{wB}$', r'$\\hat{V}_{IJ-U}^{B}$', r'$\\hat{V}_{Boot}$']
+    weights_zero = [round(_, 2) for _ in exp_settings['portion_zero_weights_train[1,3,5]']]
+
+    plt.figure(figsize=(10, 5))
+    offsets = np.linspace(-0.02, 0.02, len(methods))
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c']
+
+    for j, (m, label) in enumerate(zip(methods, labels)):
+        for i, wz in enumerate(weights_zero):
+            df = list(results_map.values())[i]
+            true_var = df['rf_pred'].var(ddof=1)
+            est_std = np.sqrt(np.maximum(df[m], 0))
+            true_std = np.sqrt(true_var)
+            rb = (est_std.mean() - true_std) / true_std * 100
+            err = ((est_std - true_std) / true_std * 100).std(ddof=1)
+            plt.errorbar(wz + offsets[j], rb, yerr=1.96 * err, fmt='o', color=colors[j], label=label if i == 0 else "")
+
+    plt.axhline(0, color='red', linestyle='--')
+    plt.grid(True)
+    plt.xticks(weights_zero)
+    plt.xlabel(r'$p_{w_0}$')
+    plt.ylabel('rel. bias of std-estimator (in %)')
+    plt.legend(title='Estimator')
+    plt.tight_layout()
+    plt.savefig(os.path.join(exp_save_path, 'variance_rb_required_estimators.png'), dpi=300)
+    plt.close()
+
+    # 3) NEW: Distribution plot of RF prediction by scenario
+    plt.figure(figsize=(10, 5))
+    data = [results1['rf_pred'].values, results3['rf_pred'].values, results5['rf_pred'].values]
+    plt.boxplot(data, labels=[f"p_w0={w}" for w in weights_zero], showfliers=False)
+    for i, s in enumerate(S_t, start=1):
+        plt.scatter(i, s, color='red', marker='x', s=80, label='True S(tau|X_pred)' if i == 1 else "")
+    plt.ylabel('RF prediction at tau')
+    plt.xlabel('Scenario')
+    plt.title('RF prediction distribution across scenarios')
+    plt.grid(True, axis='y', alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(os.path.join(exp_save_path, 'rf_prediction_distribution.png'), dpi=300)
+    plt.close()
+
+    # 4) NEW: Estimator mean vs empirical variance plot
+    plt.figure(figsize=(10, 5))
+    emp_vars = [results1['rf_pred'].var(ddof=1), results3['rf_pred'].var(ddof=1), results5['rf_pred'].var(ddof=1)]
+    x = np.arange(len(weights_zero))
+    width = 0.2
+    plt.bar(x - 1.5 * width, emp_vars, width=width, label='empirical var(rf_pred)')
+    plt.bar(x - 0.5 * width, [results1['ijk_u_jahn_var'].mean(), results3['ijk_u_jahn_var'].mean(), results5['ijk_u_jahn_var'].mean()], width=width, label='mean ijk_u_jahn_var')
+    plt.bar(x + 0.5 * width, [results1['ijk_u_wager_var'].mean(), results3['ijk_u_wager_var'].mean(), results5['ijk_u_wager_var'].mean()], width=width, label='mean ijk_u_wager_var')
+    plt.bar(x + 1.5 * width, [results1['boot_var'].mean(), results3['boot_var'].mean(), results5['boot_var'].mean()], width=width, label='mean boot_var')
+    plt.xticks(x, [f"p_w0={w}" for w in weights_zero])
+    plt.ylabel('Variance')
+    plt.title('Variance estimator means vs empirical prediction variance')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(os.path.join(exp_save_path, 'variance_estimator_comparison.png'), dpi=300)
+    plt.close()
+
+    return {
+        "plots": [
+            "pred_S_bias...png",
+            "variance_rb_required_estimators.png",
+            "rf_prediction_distribution.png",
+            "variance_estimator_comparison.png",
+        ]
+    }
