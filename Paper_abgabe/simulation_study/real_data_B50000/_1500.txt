@@ -1,0 +1,5 @@
+survived
+0      0.39
+1      0.31
+999    0.30
+Name: proportion, dtype: float64

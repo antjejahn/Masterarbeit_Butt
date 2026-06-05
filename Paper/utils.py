@@ -230,8 +230,8 @@ def create_weibull_data(params: dict, random_state: int) -> pd.DataFrame:
         rng = np.random.default_rng(random_state)
         X_1 = rng.binomial(1, 0.3, n)
         X_2 = rng.binomial(1, 0.8, n)
-        X_3 = rng.normal(80, 10, n)  
-        X_4 = rng.normal(40, 5, n)  
+        X_3 = rng.normal(80, 0.2, n)  
+        X_4 = rng.normal(40, 0.2, n)  
 
 
         # Lambda Weibull
